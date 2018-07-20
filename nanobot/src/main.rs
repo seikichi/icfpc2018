@@ -1,12 +1,11 @@
-
 enum Harmonics {
     Low,
-    High
+    High,
 }
 
 enum Voxel {
     Full,
-    Void
+    Void,
 }
 
 enum Command {
@@ -20,35 +19,35 @@ enum Command {
     Fill(NCD),
     // group
     FusionP(NCD),
-    FusionS(NCD)
+    FusionS(NCD),
 }
 
 struct NCD {
-    x : i32,
-    y : i32,
-    z : i32
+    x: i32,
+    y: i32,
+    z: i32,
 }
 
 struct LCD {
-    x : i32,
-    y : i32,
-    z : i32
+    x: i32,
+    y: i32,
+    z: i32,
 }
 
 struct Bid(usize);
 
 struct Nanobot {
-    bid : usize,
-    pos : (i32, i32, i32),
-    seeds : Vec<Bid>
+    bid: usize,
+    pos: (i32, i32, i32),
+    seeds: Vec<Bid>,
 }
 
 struct State {
-    energy : i64,
-    harmonics : Harmonics,
-    matrix : Vec<Vec<Vec<Voxel>>>,
-    bots : Vec<Nanobot>,
-    trace : Vec<Command>
+    energy: i64,
+    harmonics: Harmonics,
+    matrix: Vec<Vec<Vec<Voxel>>>,
+    bots: Vec<Nanobot>,
+    trace: Vec<Command>,
 }
 
 impl State {
@@ -58,12 +57,12 @@ impl State {
 }
 
 struct Model {
-    matrix : Vec<Vec<Vec<Voxel>>>
+    matrix: Vec<Vec<Vec<Voxel>>>
 }
 
 impl Model {
     fn new() -> Self {
-        return Model{matrix : vec![]};
+        return Model { matrix: vec![] };
     }
 }
 
