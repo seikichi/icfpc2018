@@ -1,10 +1,10 @@
+use std::cmp::*;
 use std::error::*;
+use std::fmt;
 use std::fs;
 use std::io::Write;
-use std::path::Path;
 use std::ops::Add;
-use std::fmt;
-use std::cmp::*;
+use std::path::Path;
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
 pub enum Harmonics {
@@ -292,11 +292,12 @@ impl<'a> Add<&'a CD> for Position {
     }
 }
 
-pub fn region(p1: Position, p2: Position) -> impl Iterator<Item=Position> {
-    (min(p1.z, p2.z)..max(p1.z, p2.z)+1).flat_map(move |z|
-        (min(p1.y, p2.y)..max(p1.y, p2.y)+1).flat_map(move |y|
-            (min(p1.x, p2.x)..max(p1.x, p2.x)+1).map(move |x|
-                Position::new(x, y, z))))
+pub fn region(p1: Position, p2: Position) -> impl Iterator<Item = Position> {
+    (min(p1.z, p2.z)..max(p1.z, p2.z) + 1).flat_map(move |z| {
+        (min(p1.y, p2.y)..max(p1.y, p2.y) + 1).flat_map(move |y| {
+            (min(p1.x, p2.x)..max(p1.x, p2.x) + 1).map(move |x| Position::new(x, y, z))
+        })
+    })
 }
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]

@@ -1,7 +1,7 @@
 use common::*;
+use std::collections::HashSet;
 use std::error::*;
 use std::fmt;
-use std::collections::HashSet;
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
 pub struct State {
@@ -93,9 +93,7 @@ impl State {
                 Ok(single_volatile_coordinate(c))
             }
 
-            Command::Wait => {
-                Ok(single_volatile_coordinate(c))
-            },
+            Command::Wait => Ok(single_volatile_coordinate(c)),
 
             Command::Flip => {
                 self.harmonics = match self.harmonics {
@@ -105,9 +103,7 @@ impl State {
                 Ok(single_volatile_coordinate(c))
             }
 
-            Command::SMove(llcd) => {
-                self.move_straight(llcd, nanobot_index, command)
-            }
+            Command::SMove(llcd) => self.move_straight(llcd, nanobot_index, command),
 
             Command::LMove(slcd1, slcd2) => {
                 let vc1 = self.move_straight(slcd1, nanobot_index, command)?;
@@ -145,11 +141,19 @@ impl State {
         }
     }
 
-    fn move_straight(&mut self, diff: &CD, nanobot_index: usize, command: &Command) -> Result<VolatileCoordinates, Box<Error>> {
+    fn move_straight(
+        &mut self,
+        diff: &CD,
+        nanobot_index: usize,
+        command: &Command,
+    ) -> Result<VolatileCoordinates, Box<Error>> {
         let c = self.bots[nanobot_index].pos;
         let new_c = c + diff;
         if !self.is_valid_coordinate(&new_c) {
-            let message = format!("nanobot is out of matrix: command={:?}, c={}", command, new_c);
+            let message = format!(
+                "nanobot is out of matrix: command={:?}, c={}",
+                command, new_c
+            );
             return Err(Box::new(SimulationError::new(message)));
         }
 
@@ -238,7 +242,10 @@ fn test_smove_command() {
             .unwrap();
         assert_eq!(state.bots[0].pos, Position::new(1, 2, 0));
         assert_eq!(state.energy, 6);
-        assert_eq!(vc, region(Position::new(1, 0, 0), Position::new(1, 2, 0)).collect());
+        assert_eq!(
+            vc,
+            region(Position::new(1, 0, 0), Position::new(1, 2, 0)).collect()
+        );
         state
             .update_one(0, &Command::SMove(LLCD::new(0, 0, 1)))
             .unwrap();
