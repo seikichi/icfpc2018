@@ -98,9 +98,13 @@ impl State {
             Harmonics::High => 30,
         };
         self.energy += self.bots.len() as i64 * 20;
+
         let mut vcs = VolatileCoordinates::new();
+        let mut added_bots = vec![];
+
         for (i, command) in commands.iter().enumerate() {
             let output = self.update_one(i, command)?;
+
             let vc = output.vc;
             if !vcs.is_disjoint(&vc) {
                 let message = format!(
@@ -110,7 +114,11 @@ impl State {
                 return Err(Box::new(SimulationError::new(message)));
             }
             vcs.extend(vc);
+
+            added_bots.extend(output.added_bots);
         }
+
+        self.bots.extend(added_bots);
         Ok(())
     }
 
