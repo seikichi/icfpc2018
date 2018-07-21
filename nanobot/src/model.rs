@@ -4,7 +4,7 @@ use std::io::BufRead;
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
 pub struct Model {
-    matrix: Vec<Vec<Vec<Voxel>>>,
+    pub matrix: Vec<Vec<Vec<Voxel>>>,
 }
 
 impl Model {
