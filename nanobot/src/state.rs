@@ -94,31 +94,13 @@ impl State {
             }
 
             Command::SMove(llcd) => {
-                let new_c = c + llcd;
-                if !self.is_valid_coordinate(&new_c) {
-                    let message = format!("nanobot is out of matrix: command=SMove, c={}", new_c);
-                    return Err(Box::new(SimulationError::new(message)));
-                }
-                self.bots[nanobot_index].pos = new_c;
-                self.energy += 2 * llcd.manhattan_length() as i64;
-                Ok(())
+                self.move_straight(llcd, nanobot_index, command)
             }
 
             Command::LMove(slcd1, slcd2) => {
-                let new_c1 = c + slcd1;
-                let new_c2 = new_c1 + slcd2;
-
-                for new_c in vec![&new_c1, &new_c2] {
-                    if !self.is_valid_coordinate(new_c) {
-                        let message =
-                            format!("nanobot is out of matrix: command=LMove, c={}", new_c);
-                        return Err(Box::new(SimulationError::new(message)));
-                    }
-                }
-
-                self.bots[nanobot_index].pos = new_c2;
-                self.energy += 2 * (slcd1.manhattan_length() + slcd2.manhattan_length() + 2) as i64;
-
+                self.move_straight(slcd1, nanobot_index, command)?;
+                self.move_straight(slcd2, nanobot_index, command)?;
+                self.energy += 4;
                 Ok(())
             }
 
@@ -144,6 +126,18 @@ impl State {
 
             _ => unimplemented!(),
         }
+    }
+
+    fn move_straight(&mut self, diff: &CD, nanobot_index: usize, command: &Command) -> Result<(), Box<Error>> {
+        let c = self.bots[nanobot_index].pos;
+        let new_c = c + diff;
+        if !self.is_valid_coordinate(&new_c) {
+            let message = format!("nanobot is out of matrix: command={:?}, c={}", command, new_c);
+            return Err(Box::new(SimulationError::new(message)));
+        }
+        self.bots[nanobot_index].pos = new_c;
+        self.energy += 2 * diff.manhattan_length() as i64;
+        Ok(())
     }
 
     fn is_valid_coordinate(&self, p: &Position) -> bool {
