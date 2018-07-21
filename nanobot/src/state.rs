@@ -2,6 +2,7 @@ use common::*;
 use std::collections::HashSet;
 use std::error::*;
 use std::fmt;
+use std::iter::Extend;
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
 pub struct State {
@@ -62,6 +63,27 @@ fn single_volatile_coordinate(p: Position) -> VolatileCoordinates {
 }
 
 impl State {
+    pub fn update_time_step(&mut self, commands: &Vec<Command>) -> Result<(), Box<Error>> {
+        let r = self.matrix.len();
+        self.energy += (r * r * r) as i64 * match self.harmonics {
+            Harmonics::Low => 3,
+            Harmonics::High => 30,
+        };
+        self.energy += self.bots.len() as i64 * 20;
+        let mut vcs = VolatileCoordinates::new();
+        for (i, command) in commands.iter().enumerate() {
+            let vc = self.update_one(i, command)?;
+            if !vcs.is_disjoint(&vc) {
+                let message = format!(
+                    "nanobot interfere : command={:?}, naonbot_index={}",
+                    command, i
+                );
+                return Err(Box::new(SimulationError::new(message)));
+            }
+            vcs.extend(vc);
+        }
+        Ok(())
+    }
     pub fn update_one(
         &mut self,
         nanobot_index: usize,
@@ -106,11 +128,12 @@ impl State {
             Command::SMove(llcd) => self.move_straight(llcd, nanobot_index, command),
 
             Command::LMove(slcd1, slcd2) => {
-                let vc1 = self.move_straight(slcd1, nanobot_index, command)?;
+                let mut vc1 = self.move_straight(slcd1, nanobot_index, command)?;
                 let vc2 = self.move_straight(slcd2, nanobot_index, command)?;
                 self.energy += 4;
+                vc1.extend(&vc2);
 
-                Ok(vc1.union(&vc2).map(|p| *p).collect())
+                Ok(vc1)
             }
 
             Command::Fill(ncd) => {
