@@ -14,7 +14,7 @@ impl GridFissionAI {
 
 impl AI for GridFissionAI {
     fn generate(&self, model: &Model) -> Vec<Command> {
-        vec![]
+        generate_devide_commands((17, 15), (4, 4))
     }
 }
 
@@ -50,33 +50,41 @@ fn generate_devide_commands(size: (usize, usize), split: (usize, usize)) -> Vec<
     let ncd_x1 = NCD::new(1, 0, 0);
     for i in 0..(split.0 - 1) {
         let rest = split.1 * (split.0 - i - 1);
-        commands.push(Command::Fission(ncd_x1.clone(), rest - 1));
         commands.extend(repeat(Command::Wait).take(i));
+        commands.push(Command::Fission(ncd_x1.clone(), rest - 1));
         let width = (size.0 / split.0) as i32 + if i < size.0 % split.0 { 1 } else { 0 };
         let x_moves = move_straight_x(width - 1);
         for m in x_moves.into_iter() {
-            commands.push(m);
             commands.extend(repeat(Command::Wait).take(i + 1));
+            commands.push(m);
         }
     }
 
     let ncd_z1 = NCD::new(0, 0, 1);
     for i in 0..(split.1 - 1) {
         let fussion = Command::Fission(ncd_z1.clone(), split.1 - i - 2);
-        let nanobot_nums = split.0 * (i + 1);
-        for j in 0..nanobot_nums {
-            commands.push(if j % (i + 1) == 0 {
-                fussion.clone()
-            } else {
-                Command::Wait
-            });
-        }
         let width = (size.1 / split.1) as i32 + if i < size.1 % split.1 { 1 } else { 0 };
         let z_moves = move_straight_z(width - 1);
-        for m in z_moves.iter() {
+
+        if i == 0 {
+            commands.extend(repeat(fussion).take(split.0));
+            for m in z_moves.iter() {
+                commands.extend(repeat(Command::Wait).take(split.0));
+                commands.extend(repeat(m.clone()).take(split.0));
+            }
+        } else {
+            commands.extend(repeat(Command::Wait).take(split.0));
             for _ in 0..split.0 {
-                commands.push(m.clone());
-                commands.extend(repeat(Command::Wait).take(i + 1));
+                commands.extend(repeat(Command::Wait).take(i - 1));
+                commands.push(fussion.clone());
+            }
+
+            for m in z_moves.iter() {
+                commands.extend(repeat(Command::Wait).take(split.0));
+                for j in 0..split.0 {
+                    commands.extend(repeat(Command::Wait).take(i));
+                    commands.push(m.clone());
+                }
             }
         }
     }
@@ -112,28 +120,28 @@ fn test_generate_devide_commands_with_2x3() {
         // step
         Command::Fission(ncd_x1.clone(), 2),
         // step
+        Command::Wait,
         Command::SMove(llcd_x1.clone()),
-        Command::Wait,
         // step
         Command::Fission(ncd_z1.clone(), 1),
         Command::Fission(ncd_z1.clone(), 1),
         // step
-        Command::SMove(llcd_z1.clone()),
+        Command::Wait,
         Command::Wait,
         Command::SMove(llcd_z1.clone()),
-        Command::Wait,
+        Command::SMove(llcd_z1.clone()),
         // step
-        Command::Fission(ncd_z1.clone(), 0),
+        Command::Wait,
         Command::Wait,
         Command::Fission(ncd_z1.clone(), 0),
-        Command::Wait,
+        Command::Fission(ncd_z1.clone(), 0),
         // Step
+        Command::Wait,
+        Command::Wait,
+        Command::Wait,
         Command::SMove(llcd_z1.clone()),
         Command::Wait,
-        Command::Wait,
         Command::SMove(llcd_z1.clone()),
-        Command::Wait,
-        Command::Wait,
     ];
 
     assert_eq!(expect, commands);
@@ -152,16 +160,47 @@ fn test_generate_devide_commands_with_2x2() {
         // step
         Command::Fission(ncd_x1.clone(), 1),
         // step
+        Command::Wait,
         Command::SMove(llcd_x1.clone()),
-        Command::Wait,
         // step
         Command::Fission(ncd_z1.clone(), 0),
         Command::Fission(ncd_z1.clone(), 0),
         // step
-        Command::SMove(llcd_z2.clone()),
+        Command::Wait,
         Command::Wait,
         Command::SMove(llcd_z2.clone()),
+        Command::SMove(llcd_z2.clone()),
+    ];
+
+    assert_eq!(expect, commands);
+}
+
+#[test]
+fn test_generate_devide_commands_with_3x2() {
+    let ncd_x1 = NCD::new(1, 0, 0);
+    let ncd_z1 = NCD::new(0, 0, 1);
+
+    let llcd_x1 = LLCD::new(1, 0, 0);
+    let llcd_z2 = LLCD::new(0, 0, 2);
+
+    let commands = generate_devide_commands((3, 3), (3, 3));
+    let expect = vec![
+        // step
+        Command::Fission(ncd_x1.clone(), 5),
+        // step
         Command::Wait,
+        Command::Fission(ncd_x1.clone(), 2),
+        // step
+        Command::Fission(ncd_z1.clone(), 1),
+        Command::Fission(ncd_z1.clone(), 1),
+        Command::Fission(ncd_z1.clone(), 1),
+        // step
+        Command::Wait,
+        Command::Wait,
+        Command::Wait,
+        Command::Fission(ncd_z1.clone(), 0),
+        Command::Fission(ncd_z1.clone(), 0),
+        Command::Fission(ncd_z1.clone(), 0),
     ];
 
     assert_eq!(expect, commands);
