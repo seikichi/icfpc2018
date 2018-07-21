@@ -66,6 +66,31 @@ fn command_encode_test() {
     let flip = Command::Flip.encode();
     assert_eq!(flip.len(), 1);
     assert_eq!(flip[0], 0b11111101);
+    let smove = Command::SMove(LLCD::new(12, 0, 0)).encode();
+    assert_eq!(smove.len(), 2);
+    assert_eq!(smove[0], 0b00010100);
+    assert_eq!(smove[1], 0b00011011);
+    let smove = Command::SMove(LLCD::new(0, 0, -4)).encode();
+    assert_eq!(smove.len(), 2);
+    assert_eq!(smove[0], 0b00110100);
+    assert_eq!(smove[1], 0b00001011);
+    let lmove = Command::LMove(SLCD::new(3, 0, 0), SLCD::new(0, -5, 0)).encode();
+    assert_eq!(lmove.len(), 2);
+    assert_eq!(lmove[0], 0b10011100);
+    assert_eq!(lmove[1], 0b00001000);
+    let fusionp = Command::FusionP(NCD::new(-1, 1, 0)).encode();
+    assert_eq!(fusionp.len(), 1);
+    assert_eq!(fusionp[0], 0b00111111);
+    let fusions = Command::FusionS(NCD::new(1, -1, 0)).encode();
+    assert_eq!(fusions.len(), 1);
+    assert_eq!(fusions[0], 0b10011110);
+    let fission = Command::Fission(NCD::new(0, 0, 1), 5).encode();
+    assert_eq!(fission.len(), 2);
+    assert_eq!(fission[0], 0b01110101);
+    assert_eq!(fission[1], 0b00000101);
+    let fill = Command::Fill(NCD::new(0, -1, 0)).encode();
+    assert_eq!(fill.len(), 1);
+    assert_eq!(fill[0], 0b01010011);
 }
 
 pub trait CD {
