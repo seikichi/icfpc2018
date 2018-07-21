@@ -237,8 +237,48 @@ impl State {
                 })
             }
 
-            _ => unimplemented!(),
+            Command::FusionP(ncd) => {
+                let secondary_c = c + ncd;
+                let secondary_bot_index = self.find_bot_by_coordinate(secondary_c)
+                    .ok_or_else(|| {
+                        let message = format!(
+                            "failed to find nanobot at the location: command={:?}, c={}",
+                            command, secondary_c
+                        );
+                        return Box::new(SimulationError::new(message));
+                    })?;
+                let mut secondary_bot = self.bots[secondary_bot_index].clone();
+
+                let bot = &mut self.bots[nanobot_index];
+                bot.seeds.push(secondary_bot.bid);
+                bot.seeds.append(&mut secondary_bot.seeds);
+                self.energy -= 24;
+
+                Ok(UpdateOneOutput {
+                    vc: couple_volatile_coordinates(c, secondary_c),
+                    added_bots: vec![],
+                    deleted_bot_bids: vec![secondary_bot.bid],
+                })
+            }
+
+            Command::FusionS(_) => {
+                // do nothing
+                Ok(UpdateOneOutput {
+                    vc: VolatileCoordinates::new(),
+                    added_bots: vec![],
+                    deleted_bot_bids: vec![],
+                })
+            }
         }
+    }
+
+    fn find_bot_by_coordinate(&self, p: Position) -> Option<usize> {
+        for (i, bot) in self.bots.iter().enumerate() {
+            if bot.pos == p {
+                return Some(i);
+            }
+        }
+        None
     }
 
     fn move_straight(
