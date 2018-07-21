@@ -1,4 +1,5 @@
 use common::*;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::error::*;
 use std::fmt;
@@ -118,6 +119,39 @@ impl State {
 
             added_bots.extend(output.added_bots);
             deleted_bot_bids.extend(output.deleted_bot_bids)
+        }
+
+        let mut fusionps = HashMap::<Position, Position>::new();
+        for (i, c) in commands.iter().enumerate() {
+            if let Command::FusionP(ncd) = c {
+                let secondary_c = self.bots[i].pos + ncd;
+                fusionps.insert(self.bots[i].pos, secondary_c);
+            }
+        }
+        let mut fusions_cnt = 0;
+        for (i, c) in commands.iter().enumerate() {
+            if let Command::FusionS(ncd) = c {
+                fusions_cnt += 1;
+                let primary_c = self.bots[i].pos + ncd;
+                match fusionps.get(&primary_c) {
+                    Some(&p) if p == self.bots[i].pos => {}
+                    Some(_) | None => {
+                        let message = format!(
+                            "FusionP and FusionS are not corresponding : fusions_naonbot_index={}",
+                            i
+                        );
+                        return Err(Box::new(SimulationError::new(message)));
+                    }
+                }
+            }
+        }
+        if fusionps.len() != fusions_cnt {
+            let message = format!(
+                "FusionP count is not equal FusionS count : FusionP count={} FusionS count={}",
+                fusionps.len(),
+                fusions_cnt
+            );
+            return Err(Box::new(SimulationError::new(message)));
         }
 
         self.bots.retain(|bot| !deleted_bot_bids.contains(&bot.bid));
@@ -243,8 +277,8 @@ impl State {
 
             Command::FusionP(ncd) => {
                 let secondary_c = c + ncd;
-                let secondary_bot_index = self.find_bot_by_coordinate(secondary_c)
-                    .ok_or_else(|| {
+                let secondary_bot_index =
+                    self.find_bot_by_coordinate(secondary_c).ok_or_else(|| {
                         let message = format!(
                             "failed to find nanobot at the location: command={:?}, c={}",
                             command, secondary_c
@@ -538,25 +572,89 @@ fn test_fission_command() {
 fn test_fusion_command() {
     {
         let mut state = State::initial(3);
-        state.update_time_step(&vec![Command::Fission(NCD::new(1, 0, 0), 1)]).unwrap();
+        state
+            .update_time_step(&vec![Command::Fission(NCD::new(1, 0, 0), 1)])
+            .unwrap();
         assert_eq!(state.energy, 3 * 3 * 3 * 3 + 20 + 24);
 
-        state.update_time_step(&vec![
-            Command::FusionP(NCD::new(1, 0, 0)),
-            Command::FusionS(NCD::new(-1, 0, 0)),
-        ]).unwrap();
+        state
+            .update_time_step(&vec![
+                Command::FusionP(NCD::new(1, 0, 0)),
+                Command::FusionS(NCD::new(-1, 0, 0)),
+            ])
+            .unwrap();
 
         assert_eq!(state.bots.len(), 1);
         assert_eq!(state.bots[0].bid, Bid(1));
-        assert_eq!(state.bots[0].seeds, (2..21).map(|i| Bid(i)).collect::<Vec<Bid>>());
+        assert_eq!(
+            state.bots[0].seeds,
+            (2..21).map(|i| Bid(i)).collect::<Vec<Bid>>()
+        );
         assert_eq!(state.energy, 3 * 3 * 3 * 3 * 2 + 20 + 40);
     }
 
     {
         let mut state = State::initial(3);
+        let r = state.update_time_step(&vec![Command::FusionP(NCD::new(1, 0, 0))]);
+        assert!(r.is_err());
+    }
+
+    {
+        let mut state = State::initial(3);
+        state
+            .update_time_step(&vec![Command::Fission(NCD::new(1, 0, 0), 1)])
+            .unwrap();
+        let r = state.update_time_step(&vec![Command::FusionP(NCD::new(1, 0, 0)), Command::Wait]);
+        assert!(r.is_err());
+    }
+
+    {
+        let mut state = State::initial(3);
+        state
+            .update_time_step(&vec![Command::Fission(NCD::new(1, 0, 0), 1)])
+            .unwrap();
+        let r = state.update_time_step(&vec![Command::Wait, Command::FusionS(NCD::new(-1, 0, 0))]);
+        assert!(r.is_err());
+    }
+
+    {
+        let mut state = State::initial(3);
+        state
+            .update_time_step(&vec![Command::Fission(NCD::new(1, 0, 0), 5)])
+            .unwrap();
+        state
+            .update_time_step(&vec![
+                Command::Fission(NCD::new(1, 1, 0), 1),
+                Command::Fission(NCD::new(-1, 1, 0), 1),
+            ])
+            .unwrap();
         let r = state.update_time_step(&vec![
             Command::FusionP(NCD::new(1, 0, 0)),
+            Command::FusionS(NCD::new(-1, 0, 0)),
+            Command::FusionP(NCD::new(1, 0, 0)),
+            Command::FusionS(NCD::new(-1, 0, 0)),
         ]);
+        assert!(r.is_ok());
+    }
+
+    {
+        let mut state = State::initial(3);
+        state
+            .update_time_step(&vec![Command::Fission(NCD::new(1, 0, 0), 5)])
+            .unwrap();
+        state
+            .update_time_step(&vec![
+                Command::Fission(NCD::new(1, 1, 0), 1),
+                Command::Fission(NCD::new(-1, 1, 0), 1),
+            ])
+            .unwrap();
+        let r = state.update_time_step(&vec![
+            Command::FusionP(NCD::new(1, 0, 0)),
+            Command::FusionS(NCD::new(-1, 1, 0)),
+            Command::FusionP(NCD::new(1, 0, 0)),
+            Command::FusionS(NCD::new(-1, -1, 0)),
+        ]);
+        // println!("{:?}", r);
         assert!(r.is_err());
     }
 }
@@ -583,15 +681,20 @@ fn test_update_time_step() {
 
     {
         let mut state = State::initial(3);
-        state.update_time_step(&vec![Command::Fission(NCD::new(1, 0, 0), 5)]).unwrap();
-        state.update_time_step(&vec![
-            Command::Fission(NCD::new(0, 1, 0), 1),
-            Command::Fission(NCD::new(1, 1, 0), 1),
-        ]).unwrap();
+        state
+            .update_time_step(&vec![Command::Fission(NCD::new(1, 0, 0), 5)])
+            .unwrap();
+        state
+            .update_time_step(&vec![
+                Command::Fission(NCD::new(0, 1, 0), 1),
+                Command::Fission(NCD::new(1, 1, 0), 1),
+            ])
+            .unwrap();
 
         assert_eq!(
             state.bots.iter().map(|bot| bot.bid).collect::<Vec<_>>(),
-            vec![Bid(1), Bid(2), Bid(3), Bid(8)])
+            vec![Bid(1), Bid(2), Bid(3), Bid(8)]
+        )
     }
 
     {
