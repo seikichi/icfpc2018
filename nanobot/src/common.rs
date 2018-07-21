@@ -246,9 +246,9 @@ pub struct Bid(usize);
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
 pub struct Nanobot {
-    bid: usize,
-    pos: (i32, i32, i32),
-    seeds: Vec<Bid>,
+    pub bid: usize,
+    pub pos: (i32, i32, i32),
+    pub seeds: Vec<Bid>,
 }
 
 pub fn encode_trace(trace: &[Command]) -> Vec<u8> {
