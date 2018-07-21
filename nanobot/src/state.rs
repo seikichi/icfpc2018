@@ -598,6 +598,65 @@ fn test_fusion_command() {
         let r = state.update_time_step(&vec![Command::FusionP(NCD::new(1, 0, 0))]);
         assert!(r.is_err());
     }
+
+    {
+        let mut state = State::initial(3);
+        state
+            .update_time_step(&vec![Command::Fission(NCD::new(1, 0, 0), 1)])
+            .unwrap();
+        let r = state.update_time_step(&vec![Command::FusionP(NCD::new(1, 0, 0)), Command::Wait]);
+        assert!(r.is_err());
+    }
+
+    {
+        let mut state = State::initial(3);
+        state
+            .update_time_step(&vec![Command::Fission(NCD::new(1, 0, 0), 1)])
+            .unwrap();
+        let r = state.update_time_step(&vec![Command::Wait, Command::FusionS(NCD::new(-1, 0, 0))]);
+        assert!(r.is_err());
+    }
+
+    {
+        let mut state = State::initial(3);
+        state
+            .update_time_step(&vec![Command::Fission(NCD::new(1, 0, 0), 5)])
+            .unwrap();
+        state
+            .update_time_step(&vec![
+                Command::Fission(NCD::new(1, 1, 0), 1),
+                Command::Fission(NCD::new(-1, 1, 0), 1),
+            ])
+            .unwrap();
+        let r = state.update_time_step(&vec![
+            Command::FusionP(NCD::new(1, 0, 0)),
+            Command::FusionS(NCD::new(-1, 0, 0)),
+            Command::FusionP(NCD::new(1, 0, 0)),
+            Command::FusionS(NCD::new(-1, 0, 0)),
+        ]);
+        assert!(r.is_ok());
+    }
+
+    {
+        let mut state = State::initial(3);
+        state
+            .update_time_step(&vec![Command::Fission(NCD::new(1, 0, 0), 5)])
+            .unwrap();
+        state
+            .update_time_step(&vec![
+                Command::Fission(NCD::new(1, 1, 0), 1),
+                Command::Fission(NCD::new(-1, 1, 0), 1),
+            ])
+            .unwrap();
+        let r = state.update_time_step(&vec![
+            Command::FusionP(NCD::new(1, 0, 0)),
+            Command::FusionS(NCD::new(-1, 1, 0)),
+            Command::FusionP(NCD::new(1, 0, 0)),
+            Command::FusionS(NCD::new(-1, -1, 0)),
+        ]);
+        // println!("{:?}", r);
+        assert!(r.is_err());
+    }
 }
 
 #[test]
