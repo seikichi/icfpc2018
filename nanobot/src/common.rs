@@ -211,9 +211,9 @@ fn slcd_encode_test() {
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug)]
 pub struct LLCD {
-    x: i32,
-    y: i32,
-    z: i32,
+    pub x: i32,
+    pub y: i32,
+    pub z: i32,
 }
 
 impl LLCD {
@@ -296,6 +296,9 @@ impl<'a> Add<&'a CD> for Position {
         }
     }
 }
+
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug, Hash)]
+pub struct Region(Position, Position);
 
 impl CD for Position {
     fn x(&self) -> i32 {

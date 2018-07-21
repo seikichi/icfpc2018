@@ -10,7 +10,8 @@ use std::io::BufReader;
 use std::path::Path;
 use std::process;
 
-use ai::simple::SimpleAI;
+// use ai::simple::SimpleAI;
+use ai::grid_fission::GridFissionAI;
 use ai::AI;
 use common::write_trace_file;
 use model::Model;
@@ -33,7 +34,7 @@ fn main() {
 
     let model = Model::new(&mut f).expect("failed to open model");
 
-    let ai = SimpleAI::new();
+    let ai = GridFissionAI::new();
     let commands = ai.generate(&model);
 
     write_trace_file(trace_output_path, &commands).expect("failed to write trace");
