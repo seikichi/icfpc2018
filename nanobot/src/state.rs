@@ -81,7 +81,7 @@ impl State {
 
                 for new_c in vec![&new_c1, &new_c2] {
                     if !self.is_valid_coordinate(new_c) {
-                        let message = format!("nanobot is out of matrix: command=SMove, c={}", new_c);
+                        let message = format!("nanobot is out of matrix: command=LMove, c={}", new_c);
                         return Err(Box::new(SimulationError::new(message)))
                     }
                 }
@@ -90,7 +90,29 @@ impl State {
                 self.energy += 2 * (slcd1.manhattan_length() + slcd2.manhattan_length() + 2) as i64;
 
                 Ok(())
-            }
+            },
+
+            Command::Fill(ncd) => {
+                let new_c = c + ncd;
+
+                if !self.is_valid_coordinate(&new_c) {
+                    let message = format!("nanobot is out of matrix: command=Fill, c={}", new_c);
+                    return Err(Box::new(SimulationError::new(message)))
+                }
+
+                match self.matrix[new_c.z as usize][new_c.y as usize][new_c.x as usize] {
+                    Voxel::Void => {
+                        self.matrix[new_c.z as usize][new_c.y as usize][new_c.x as usize] = Voxel::Full;
+                        self.energy += 12
+                    },
+                    Voxel::Full => {
+                        self.energy += 6
+                    }
+                }
+
+                Ok(())
+            },
+
             _ => unimplemented!()
         }
     }
