@@ -1,8 +1,8 @@
 use std::error::*;
 use std::fs;
-use std::io::BufWriter;
 use std::io::Write;
 use std::path::Path;
+use std::ops::Add;
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
 pub enum Harmonics {
@@ -242,12 +242,37 @@ fn llcd_encode_test() {
 }
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
+pub struct Position {
+    pub x: i32,
+    pub y: i32,
+    pub z: i32,
+}
+
+impl Position {
+    pub fn new(x: i32, y: i32, z: i32) -> Position {
+        Position { x, y, z }
+    }
+}
+
+impl<'a> Add<&'a CD> for Position {
+    type Output = Position;
+
+    fn add(self, other: &'a CD) -> Position {
+        Position {
+            x: self.x + other.x(),
+            y: self.y + other.y(),
+            z: self.z + other.z(),
+        }
+    }
+}
+
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
 pub struct Bid(usize);
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
 pub struct Nanobot {
     pub bid: usize,
-    pub pos: (i32, i32, i32),
+    pub pos: Position,
     pub seeds: Vec<Bid>,
 }
 
