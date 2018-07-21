@@ -108,12 +108,6 @@ impl State {
         };
         self.energy += self.bots.len() as i64 * 20;
 
-        if self.harmonics == Harmonics::Low &&
-            self.connectivity.size(r * r * r) - 1 != self.full_voxel_count as usize {
-            let message = format!("floating full voxel exists when harmonics is low");
-            return Err(Box::new(SimulationError::new(message)));
-        }
-
         let mut vcs = VolatileCoordinates::new();
         let mut added_bots = vec![];
         let mut deleted_bot_bids = HashSet::new();
@@ -171,6 +165,12 @@ impl State {
         self.bots.retain(|bot| !deleted_bot_bids.contains(&bot.bid));
         self.bots.extend(added_bots);
         self.bots.sort();
+
+        if self.harmonics == Harmonics::Low &&
+            self.connectivity.size(r * r * r) - 1 != self.full_voxel_count as usize {
+            let message = format!("floating full voxel exists when harmonics is low");
+            return Err(Box::new(SimulationError::new(message)));
+        }
 
         Ok(())
     }
@@ -398,6 +398,11 @@ impl State {
         }
         true
     }
+
+    fn is_grounded(&mut self, p: &Position) -> bool {
+        let r = self.matrix.len();
+        self.connectivity.find_set(p.index(r), r*r*r)
+    }
 }
 
 #[test]
@@ -531,22 +536,28 @@ fn test_fill_command() {
             .update_one(0, &Command::Fill(NCD::new(1, 0, 0)))
             .unwrap()
             .vc;
-        let mut expected_vc = VolatileCoordinates::new();
-        expected_vc.insert(Position::new(0, 0, 0));
-        expected_vc.insert(Position::new(1, 0, 0));
         assert_eq!(state.matrix[0][0][1], Voxel::Full);
         assert_eq!(state.energy, 12);
-        assert_eq!(vc, expected_vc);
+        assert_eq!(vc, couple_volatile_coordinates(Position::new(0, 0, 0), Position::new(1, 0, 0)));
+        assert!(state.is_grounded(&Position::new(1, 0, 0)));
+
         state
             .update_one(0, &Command::Fill(NCD::new(1, 0, 0)))
             .unwrap();
         assert_eq!(state.energy, 18);
+
+        state
+            .update_one(0, &Command::Fill(NCD::new(1, 1, 0)))
+            .unwrap();
+        assert!(state.is_grounded(&Position::new(1, 1, 0)));
     }
+
     {
         let mut state = State::initial(3);
         let r = state.update_one(0, &Command::Fill(NCD::new(-1, 0, 0)));
         assert!(r.is_err());
     }
+
     {
         let mut state = State::initial(3);
         state
@@ -554,6 +565,12 @@ fn test_fill_command() {
             .unwrap();
         let r = state.update_one(0, &Command::Fill(NCD::new(1, 0, 0)));
         assert!(r.is_err());
+    }
+
+    {
+        let mut state = State::initial(3);
+        state.update_one(0, &Command::Fill(NCD::new(0, 1, 0))).unwrap();
+        assert!(!state.is_grounded(&Position::new(0, 1, 0)));
     }
 }
 
@@ -757,5 +774,23 @@ fn test_update_time_step() {
         ];
         let r = state.update_time_step(&commands);
         assert!(r.is_err());
+    }
+
+    {
+        let mut state = State::initial(3);
+        let r = state.update_time_step(&vec![Command::Fill(NCD::new(0, 1, 0))]);
+        //println!("{:?}", r);
+        assert!(r.is_err());
+    }
+
+    {
+        let mut state = State::initial(3);
+        state.update_time_step(&vec![Command::Flip]).unwrap();
+        state.update_time_step(&vec![Command::Fill(NCD::new(0, 1, 0))]).unwrap();
+    }
+
+    {
+        let mut state = State::initial(3);
+        state.update_time_step(&vec![Command::Fill(NCD::new(0, 0, 1))]).unwrap();
     }
 }
