@@ -303,11 +303,29 @@ pub fn region(p1: Position, p2: Position) -> impl Iterator<Item = Position> {
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug)]
 pub struct Bid(pub usize);
 
-#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
+#[derive(Eq, Clone, Debug)]
 pub struct Nanobot {
     pub bid: Bid,
     pub pos: Position,
     pub seeds: Vec<Bid>,
+}
+
+impl Ord for Nanobot {
+    fn cmp(&self, other: &Nanobot) -> Ordering {
+        self.bid.cmp(&other.bid)
+    }
+}
+
+impl PartialOrd for Nanobot {
+    fn partial_cmp(&self, other: &Nanobot) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for Nanobot {
+    fn eq(&self, other: &Nanobot) -> bool {
+        self.bid == other.bid
+    }
 }
 
 pub fn encode_trace(trace: &[Command]) -> Vec<u8> {

@@ -119,6 +119,7 @@ impl State {
         }
 
         self.bots.extend(added_bots);
+        self.bots.sort();
         Ok(())
     }
 
@@ -510,11 +511,25 @@ fn test_update_time_step() {
 
     {
         let mut state = State::initial(3);
+        state.update_time_step(&vec![Command::Fission(NCD::new(1, 0, 0), 5)]).unwrap();
+        state.update_time_step(&vec![
+            Command::Fission(NCD::new(0, 1, 0), 1),
+            Command::Fission(NCD::new(1, 1, 0), 1),
+        ]).unwrap();
+
+        assert_eq!(
+            state.bots.iter().map(|bot| bot.bid).collect::<Vec<_>>(),
+            vec![Bid(1), Bid(2), Bid(3), Bid(8)])
+    }
+
+    {
+        let mut state = State::initial(3);
         state.update_time_step(&vec![Command::Fission(NCD::new(1, 0, 0), 0)]);
         let commands = vec![Command::Wait, Command::SMove(LLCD::new(-1, 0, 0))];
         let r = state.update_time_step(&commands);
         assert!(r.is_err());
     }
+
     {
         // xxx
         // xxx
