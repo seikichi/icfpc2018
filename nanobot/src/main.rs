@@ -1,16 +1,18 @@
-mod common;
-mod state;
-mod model;
 mod ai;
+mod common;
+mod model;
+mod state;
 
 use std::env;
 use std::fs::File;
 use std::io::BufReader;
+use std::path::Path;
 use std::process;
 
-use model::Model;
-use ai::AI;
 use ai::simple::SimpleAI;
+use ai::AI;
+use common::write_trace_file;
+use model::Model;
 
 #[test]
 fn test_truth() {
@@ -19,17 +21,20 @@ fn test_truth() {
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    if args.len() < 2 {
+    if args.len() < 3 {
         eprintln!("not enough arguments");
         process::exit(1);
     }
 
-    let filename = args[1].clone();
-    let f = File::open(filename).expect("file not found");
+    let f = File::open(args[1].clone()).expect("file not found");
     let mut f = BufReader::new(f);
+    let trace_output_path = Path::new(&args[2]);
 
     let model = Model::new(&mut f).expect("failed to open model");
 
     let ai = SimpleAI::new();
     let commands = ai.generate(&model);
+
+    println!("{:?}", commands);
+    write_trace_file(trace_output_path, &commands).expect("failed to write trace");
 }
