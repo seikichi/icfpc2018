@@ -317,3 +317,40 @@ fn test_generate_concur_commands_with_2x2() {
     ];
     assert_eq!(expect, commands);
 }
+
+#[test]
+fn test_generate_concur_commands_with_3x3() {
+    let ncd_x1 = NCD::new(1, 0, 0);
+    let ncd_x_1 = NCD::new(-1, 0, 0);
+    let ncd_z1 = NCD::new(0, 0, 1);
+    let ncd_z_1 = NCD::new(0, 0, -1);
+
+    let commands = generate_concur_commands((3, 3), (3, 3));
+    let expect: Vec<Command> = vec![
+        // step
+        Command::Wait,
+        Command::Wait,
+        Command::Wait,
+        Command::FusionP(ncd_z1.clone()),
+        Command::FusionS(ncd_z_1.clone()),
+        Command::FusionP(ncd_z1.clone()),
+        Command::FusionS(ncd_z_1.clone()),
+        Command::FusionP(ncd_z1.clone()),
+        Command::FusionS(ncd_z_1.clone()),
+        // step
+        Command::FusionP(ncd_z1.clone()),
+        Command::FusionP(ncd_z1.clone()),
+        Command::FusionP(ncd_z1.clone()),
+        Command::FusionS(ncd_z_1.clone()),
+        Command::FusionS(ncd_z_1.clone()),
+        Command::FusionS(ncd_z_1.clone()),
+        // step
+        Command::Wait,
+        Command::FusionP(ncd_x1.clone()),
+        Command::FusionS(ncd_x_1.clone()),
+        // step
+        Command::FusionP(ncd_x1.clone()),
+        Command::FusionS(ncd_x_1.clone()),
+    ];
+    assert_eq!(expect, commands);
+}
