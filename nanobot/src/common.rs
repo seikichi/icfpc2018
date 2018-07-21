@@ -255,7 +255,7 @@ fn llcd_encode_test() {
     assert_eq!(enc.1, 25);
 }
 
-#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug)]
 pub struct Position {
     pub x: i32,
     pub y: i32,
