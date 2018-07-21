@@ -172,9 +172,47 @@ fn generate_concur_commands(size: (usize, usize), split: (usize, usize)) -> Vec<
     commands
 }
 
-// fn generate_region_commands(model: &Model, region: &Region) -> Vec<Command> {
-//     vec![]
-// }
+fn generate_region_commands(model: &Model, initial: Position, size: Position) -> Vec<Command> {
+    let mut commands = vec![];
+
+    let mut x = initial.x;
+    let mut z = initial.z;
+
+    let ncd_y_1 = NCD::new(0, -1, 0);
+    let llcd_y1 = LLCD::new(0, 1, 0);
+
+    let mut xdir = LLCD::new(1, 0, 0);
+    let mut zdir = LLCD::new(0, 0, 1);
+
+    for i in 0..size.y {
+        let y = i + 1;
+        commands.push(Command::SMove(llcd_y1.clone()));
+        for j in 0..size.z {
+            for k in 0..size.x {
+                if model.matrix[x as usize][(y - 1) as usize][z as usize] == Voxel::Full {
+                    commands.push(Command::Fill(ncd_y_1.clone()));
+                }
+
+                if k != size.x - 1 {
+                    commands.push(Command::SMove(xdir.clone()));
+                    x += xdir.x;
+                }
+            }
+            xdir = LLCD::new(-1 * xdir.x, 0, 0);
+
+            if j != size.z - 1 {
+                commands.push(Command::SMove(zdir.clone()));
+                z += zdir.z;
+            }
+        }
+        zdir = LLCD::new(0, 0, -1 * zdir.z);
+    }
+
+    commands.push(Command::SMove(llcd_y1.clone()));
+    commands.extend(move_straight_x(initial.x - x));
+    commands.extend(move_straight_z(initial.z - z));
+    commands
+}
 
 #[test]
 fn test_generate_devide_commands_with_1x1() {
@@ -353,4 +391,49 @@ fn test_generate_concur_commands_with_3x3() {
         Command::FusionS(ncd_x_1.clone()),
     ];
     assert_eq!(expect, commands);
+}
+
+#[test]
+fn test_generate_region_with_3x3x3() {
+    let mut matrix = vec![vec![vec![Voxel::Void; 3]; 3]; 3];
+    matrix[1][0][1] = Voxel::Full;
+    matrix[1][1][1] = Voxel::Full;
+    let model = Model { matrix };
+
+    let initial = Position::new(0, 0, 0);
+    let size = Position::new(3, 2, 3);
+    let commands = generate_region_commands(&model, initial, size);
+
+    let x1 = Command::SMove(LLCD::new(1, 0, 0));
+    let x_1 = Command::SMove(LLCD::new(-1, 0, 0));
+    let z1 = Command::SMove(LLCD::new(0, 0, 1));
+    let z_1 = Command::SMove(LLCD::new(0, 0, -1));
+    let y1 = Command::SMove(LLCD::new(0, 1, 0));
+    let fill = Command::Fill(NCD::new(0, -1, 0));
+
+    let expected = vec![
+        y1.clone(),
+        x1.clone(),
+        x1.clone(),
+        z1.clone(),
+        x_1.clone(),
+        fill.clone(),
+        x_1.clone(),
+        z1.clone(),
+        x1.clone(),
+        x1.clone(),
+        y1.clone(),
+        x_1.clone(),
+        x_1.clone(),
+        z_1.clone(),
+        x1.clone(),
+        fill.clone(),
+        x1.clone(),
+        z_1.clone(),
+        x_1.clone(),
+        x_1.clone(),
+        y1.clone(),
+    ];
+
+    assert_eq!(expected, commands);
 }

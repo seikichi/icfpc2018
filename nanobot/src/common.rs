@@ -210,9 +210,9 @@ fn slcd_encode_test() {
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
 pub struct LLCD {
-    x: i32,
-    y: i32,
-    z: i32,
+    pub x: i32,
+    pub y: i32,
+    pub z: i32,
 }
 
 impl LLCD {
