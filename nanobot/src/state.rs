@@ -1,15 +1,22 @@
 use common::*;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::error::*;
 use std::fmt;
 use std::iter::Extend;
+use union_find::*;
 
-#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct State {
     energy: i64,
     harmonics: Harmonics,
     matrix: Vec<Vec<Vec<Voxel>>>,
     bots: Vec<Nanobot>,
+
+    // grounded かどうかの判定に使う。
+    // r*r*r 番目の要素は床を表す仮想の要素。
+    connectivity: UnionFind,
+    full_voxel_count: i32,
 }
 
 impl State {
@@ -18,13 +25,15 @@ impl State {
         let bot = Nanobot {
             bid: Bid(1),
             pos: Position::new(0, 0, 0),
-            seeds: (2..20).map(|bid| Bid(bid)).collect(),
+            seeds: (2..21).map(|bid| Bid(bid)).collect(),
         };
         State {
             energy: 0,
             harmonics: Harmonics::Low,
             matrix: vec![vec![vec![Voxel::Void; r]; r]; r],
             bots: vec![bot],
+            connectivity: UnionFind::new(r * r * r + 1),
+            full_voxel_count: 0,
         }
     }
 }
@@ -56,9 +65,36 @@ impl Error for SimulationError {
 
 type VolatileCoordinates = HashSet<Position>;
 
+pub struct UpdateOneOutput {
+    pub vc: VolatileCoordinates,
+    pub added_bots: Vec<Nanobot>,
+    pub deleted_bot_bids: Vec<Bid>,
+}
+
+impl UpdateOneOutput {
+    fn from_vc(vc: VolatileCoordinates) -> UpdateOneOutput {
+        UpdateOneOutput {
+            vc,
+            added_bots: vec![],
+            deleted_bot_bids: vec![],
+        }
+    }
+
+    fn from_single_volatile_coordinate(p: Position) -> UpdateOneOutput {
+        UpdateOneOutput::from_vc(single_volatile_coordinate(p))
+    }
+}
+
 fn single_volatile_coordinate(p: Position) -> VolatileCoordinates {
     let mut vc = VolatileCoordinates::new();
     vc.insert(p);
+    vc
+}
+
+fn couple_volatile_coordinates(p1: Position, p2: Position) -> VolatileCoordinates {
+    let mut vc = VolatileCoordinates::new();
+    vc.insert(p1);
+    vc.insert(p2);
     vc
 }
 
@@ -71,9 +107,15 @@ impl State {
             Harmonics::High => 30,
         };
         self.energy += self.bots.len() as i64 * 20;
+
         let mut vcs = VolatileCoordinates::new();
+        let mut added_bots = vec![];
+        let mut deleted_bot_bids = HashSet::new();
+
         for (i, command) in commands.iter().enumerate() {
-            let vc = self.update_one(i, command)?;
+            let output = self.update_one(i, command)?;
+
+            let vc = output.vc;
             if !vcs.is_disjoint(&vc) {
                 let message = format!(
                     "nanobot interfere : command={:?}, naonbot_index={}",
@@ -82,15 +124,66 @@ impl State {
                 return Err(Box::new(SimulationError::new(message)));
             }
             vcs.extend(vc);
+
+            added_bots.extend(output.added_bots);
+            deleted_bot_bids.extend(output.deleted_bot_bids)
         }
+
+        let mut fusionps = HashMap::<Position, Position>::new();
+        for (i, c) in commands.iter().enumerate() {
+            if let Command::FusionP(ncd) = c {
+                let secondary_c = self.bots[i].pos + ncd;
+                fusionps.insert(self.bots[i].pos, secondary_c);
+            }
+        }
+        let mut fusions_cnt = 0;
+        for (i, c) in commands.iter().enumerate() {
+            if let Command::FusionS(ncd) = c {
+                fusions_cnt += 1;
+                let primary_c = self.bots[i].pos + ncd;
+                match fusionps.get(&primary_c) {
+                    Some(&p) if p == self.bots[i].pos => {}
+                    Some(_) | None => {
+                        let message = format!(
+                            "FusionP and FusionS are not corresponding : fusions_naonbot_index={}",
+                            i
+                        );
+                        return Err(Box::new(SimulationError::new(message)));
+                    }
+                }
+            }
+        }
+        if fusionps.len() != fusions_cnt {
+            let message = format!(
+                "FusionP count is not equal FusionS count : FusionP count={} FusionS count={}",
+                fusionps.len(),
+                fusions_cnt
+            );
+            return Err(Box::new(SimulationError::new(message)));
+        }
+
+        self.bots.retain(|bot| !deleted_bot_bids.contains(&bot.bid));
+        self.bots.extend(added_bots);
+        self.bots.sort();
+
+        if self.harmonics == Harmonics::Low
+            && self.connectivity.size(r * r * r) - 1 != self.full_voxel_count as usize
+        {
+            let message = format!("floating full voxel exists when harmonics is low");
+            return Err(Box::new(SimulationError::new(message)));
+        }
+
         Ok(())
     }
+
     pub fn update_one(
         &mut self,
         nanobot_index: usize,
         command: &Command,
-    ) -> Result<VolatileCoordinates, Box<Error>> {
+    ) -> Result<UpdateOneOutput, Box<Error>> {
         let c = self.bots[nanobot_index].pos;
+        let r = self.matrix.len();
+
         match command {
             Command::Halt => {
                 if c != Position::new(0, 0, 0) {
@@ -113,20 +206,23 @@ impl State {
                 }
                 self.bots.pop();
 
-                Ok(single_volatile_coordinate(c))
+                Ok(UpdateOneOutput::from_single_volatile_coordinate(c))
             }
 
-            Command::Wait => Ok(single_volatile_coordinate(c)),
+            Command::Wait => Ok(UpdateOneOutput::from_single_volatile_coordinate(c)),
 
             Command::Flip => {
                 self.harmonics = match self.harmonics {
                     Harmonics::Low => Harmonics::High,
                     Harmonics::High => Harmonics::Low,
                 };
-                Ok(single_volatile_coordinate(c))
+                Ok(UpdateOneOutput::from_single_volatile_coordinate(c))
             }
 
-            Command::SMove(llcd) => self.move_straight(llcd, nanobot_index, command),
+            Command::SMove(llcd) => {
+                let vc = self.move_straight(llcd, nanobot_index, command)?;
+                Ok(UpdateOneOutput::from_vc(vc))
+            }
 
             Command::LMove(slcd1, slcd2) => {
                 let mut vc1 = self.move_straight(slcd1, nanobot_index, command)?;
@@ -134,7 +230,7 @@ impl State {
                 self.energy += 4;
                 vc1.extend(&vc2);
 
-                Ok(vc1)
+                Ok(UpdateOneOutput::from_vc(vc1))
             }
 
             Command::Fill(ncd) => {
@@ -145,11 +241,27 @@ impl State {
                     return Err(Box::new(SimulationError::new(message)));
                 }
 
-                match self.matrix[new_c.z as usize][new_c.y as usize][new_c.x as usize] {
+                match self.voxel_at(new_c) {
                     Voxel::Void => {
-                        self.matrix[new_c.z as usize][new_c.y as usize][new_c.x as usize] =
-                            Voxel::Full;
-                        self.energy += 12
+                        self.set_voxel_at(new_c, Voxel::Full);
+                        self.energy += 12;
+
+                        for p in region(
+                            new_c + &Position::new(-1, -1, -1),
+                            new_c + &Position::new(1, 1, 1),
+                        ) {
+                            if new_c != p
+                                && self.is_valid_coordinate(&p)
+                                && self.voxel_at(p) == Voxel::Full
+                            {
+                                self.connectivity.union_set(new_c.index(r), p.index(r));
+                            }
+                        }
+
+                        if new_c.y == 0 {
+                            self.connectivity.union_set(new_c.index(r), r * r * r);
+                        }
+                        self.full_voxel_count += 1;
                     }
                     Voxel::Full => self.energy += 6,
                 }
@@ -158,11 +270,95 @@ impl State {
                 vc.insert(c);
                 vc.insert(new_c);
 
-                Ok(vc)
+                Ok(UpdateOneOutput::from_vc(vc))
             }
 
-            _ => unimplemented!(),
+            Command::Fission(ncd, m) => {
+                let new_c = c + ncd;
+                if !self.is_valid_coordinate(&new_c) {
+                    let message = format!("nanobot is out of matrix: command=Fission, c={}", new_c);
+                    return Err(Box::new(SimulationError::new(message)));
+                }
+
+                let mut bot = &mut self.bots[nanobot_index];
+                if *m >= bot.seeds.len() {
+                    let message = format!(
+                        "too large m: command=Fission, nanobot_index={}, m={}, len={}",
+                        nanobot_index,
+                        m,
+                        bot.seeds.len()
+                    );
+                    return Err(Box::new(SimulationError::new(message)));
+                }
+
+                let new_bot = Nanobot {
+                    bid: bot.seeds[0],
+                    pos: new_c,
+                    seeds: bot.seeds[1..m + 1].to_vec(),
+                };
+
+                bot.seeds = bot.seeds[m + 1..].to_vec();
+
+                self.energy += 24;
+
+                Ok(UpdateOneOutput {
+                    vc: couple_volatile_coordinates(c, new_c),
+                    added_bots: vec![new_bot],
+                    deleted_bot_bids: vec![],
+                })
+            }
+
+            Command::FusionP(ncd) => {
+                let secondary_c = c + ncd;
+                let secondary_bot_index =
+                    self.find_bot_by_coordinate(secondary_c).ok_or_else(|| {
+                        let message = format!(
+                            "failed to find nanobot at the location: command={:?}, c={}",
+                            command, secondary_c
+                        );
+                        return Box::new(SimulationError::new(message));
+                    })?;
+                let mut secondary_bot = self.bots[secondary_bot_index].clone();
+
+                let bot = &mut self.bots[nanobot_index];
+                bot.seeds.push(secondary_bot.bid);
+                bot.seeds.append(&mut secondary_bot.seeds);
+                bot.seeds.sort();
+                self.energy -= 24;
+
+                Ok(UpdateOneOutput {
+                    vc: couple_volatile_coordinates(c, secondary_c),
+                    added_bots: vec![],
+                    deleted_bot_bids: vec![secondary_bot.bid],
+                })
+            }
+
+            Command::FusionS(_) => {
+                // do nothing
+                Ok(UpdateOneOutput {
+                    vc: VolatileCoordinates::new(),
+                    added_bots: vec![],
+                    deleted_bot_bids: vec![],
+                })
+            }
         }
+    }
+
+    fn voxel_at(&self, p: Position) -> Voxel {
+        self.matrix[p.z as usize][p.y as usize][p.x as usize]
+    }
+
+    fn set_voxel_at(&mut self, p: Position, v: Voxel) {
+        self.matrix[p.z as usize][p.y as usize][p.x as usize] = v
+    }
+
+    fn find_bot_by_coordinate(&self, p: Position) -> Option<usize> {
+        for (i, bot) in self.bots.iter().enumerate() {
+            if bot.pos == p {
+                return Some(i);
+            }
+        }
+        None
     }
 
     fn move_straight(
@@ -180,10 +376,15 @@ impl State {
             );
             return Err(Box::new(SimulationError::new(message)));
         }
+        for p in region(c, new_c) {
+            if self.matrix[p.z as usize][p.y as usize][p.x as usize] == Voxel::Full {
+                let message = format!("nanobot hits full voxel : command={:?}, c={}", command, p);
+                return Err(Box::new(SimulationError::new(message)));
+            }
+        }
 
         self.bots[nanobot_index].pos = new_c;
         self.energy += 2 * diff.manhattan_length() as i64;
-
         Ok(region(c, new_c).collect())
     }
 
@@ -202,13 +403,18 @@ impl State {
         }
         true
     }
+
+    fn is_grounded(&mut self, p: &Position) -> bool {
+        let r = self.matrix.len();
+        self.connectivity.find_set(p.index(r), r * r * r)
+    }
 }
 
 #[test]
 fn test_halt_command() {
     {
         let mut state = State::initial(3);
-        let vc = state.update_one(0, &Command::Halt).unwrap();
+        let vc = state.update_one(0, &Command::Halt).unwrap().vc;
         assert_eq!(state.bots.len(), 0);
         assert_eq!(vc, single_volatile_coordinate(Position::zero()));
     }
@@ -231,9 +437,7 @@ fn test_halt_command() {
 
     {
         let mut state = State::initial(3);
-
-        let new_bot = state.bots[0].clone();
-        state.bots.push(new_bot); // FIXME: 後でFissionにする
+        state.update_time_step(&vec![Command::Fission(NCD::new(1, 0, 0), 0)]);
 
         let r = state.update_one(0, &Command::Halt);
         assert!(r.is_err());
@@ -244,7 +448,7 @@ fn test_halt_command() {
 fn test_flip_command() {
     {
         let mut state = State::initial(3);
-        let vc = state.update_one(0, &Command::Flip).unwrap();
+        let vc = state.update_one(0, &Command::Flip).unwrap().vc;
         assert!(state.harmonics == Harmonics::High);
         assert_eq!(vc, single_volatile_coordinate(Position::zero()));
         state.update_one(0, &Command::Flip).unwrap();
@@ -263,7 +467,8 @@ fn test_smove_command() {
         assert_eq!(state.energy, 2);
         let vc = state
             .update_one(0, &Command::SMove(LLCD::new(0, 2, 0)))
-            .unwrap();
+            .unwrap()
+            .vc;
         assert_eq!(state.bots[0].pos, Position::new(1, 2, 0));
         assert_eq!(state.energy, 6);
         assert_eq!(
@@ -286,6 +491,12 @@ fn test_smove_command() {
         let r = state.update_one(0, &Command::SMove(LLCD::new(3, 0, 0)));
         assert!(r.is_err());
     }
+    {
+        let mut state = State::initial(3);
+        state.update_one(0, &Command::Fill(NCD::new(1, 0, 0)));
+        let r = state.update_one(0, &Command::SMove(LLCD::new(1, 0, 0)));
+        assert!(r.is_err());
+    }
 }
 
 #[test]
@@ -294,7 +505,8 @@ fn test_lmove_command() {
         let mut state = State::initial(3);
         let vc = state
             .update_one(0, &Command::LMove(SLCD::new(1, 0, 0), SLCD::new(0, 1, 0)))
-            .unwrap();
+            .unwrap()
+            .vc;
         let mut expected_vc = VolatileCoordinates::new();
         expected_vc.insert(Position::new(0, 0, 0));
         expected_vc.insert(Position::new(1, 0, 0));
@@ -327,29 +539,185 @@ fn test_fill_command() {
         assert_eq!(state.matrix[0][0][1], Voxel::Void);
         let vc = state
             .update_one(0, &Command::Fill(NCD::new(1, 0, 0)))
-            .unwrap();
-        let mut expected_vc = VolatileCoordinates::new();
-        expected_vc.insert(Position::new(0, 0, 0));
-        expected_vc.insert(Position::new(1, 0, 0));
+            .unwrap()
+            .vc;
         assert_eq!(state.matrix[0][0][1], Voxel::Full);
         assert_eq!(state.energy, 12);
-        assert_eq!(vc, expected_vc);
+        assert_eq!(
+            vc,
+            couple_volatile_coordinates(Position::new(0, 0, 0), Position::new(1, 0, 0))
+        );
+        assert!(state.is_grounded(&Position::new(1, 0, 0)));
+
         state
             .update_one(0, &Command::Fill(NCD::new(1, 0, 0)))
             .unwrap();
         assert_eq!(state.energy, 18);
+
+        state
+            .update_one(0, &Command::Fill(NCD::new(1, 1, 0)))
+            .unwrap();
+        assert!(state.is_grounded(&Position::new(1, 1, 0)));
     }
+
     {
         let mut state = State::initial(3);
         let r = state.update_one(0, &Command::Fill(NCD::new(-1, 0, 0)));
         assert!(r.is_err());
     }
+
     {
         let mut state = State::initial(3);
         state
             .update_one(0, &Command::SMove(LLCD::new(2, 0, 0)))
             .unwrap();
         let r = state.update_one(0, &Command::Fill(NCD::new(1, 0, 0)));
+        assert!(r.is_err());
+    }
+
+    {
+        let mut state = State::initial(3);
+        state
+            .update_one(0, &Command::Fill(NCD::new(0, 1, 0)))
+            .unwrap();
+        assert!(!state.is_grounded(&Position::new(0, 1, 0)));
+    }
+}
+
+#[test]
+fn test_fission_command() {
+    {
+        let mut state = State::initial(3);
+        let output = state
+            .update_one(0, &Command::Fission(NCD::new(1, 0, 0), 1))
+            .unwrap();
+        let mut expected_vc = VolatileCoordinates::new();
+        expected_vc.insert(Position::new(0, 0, 0));
+        expected_vc.insert(Position::new(1, 0, 0));
+        assert_eq!(state.energy, 24);
+        assert_eq!(state.bots.len(), 1);
+        assert_eq!(state.bots[0].pos, Position::zero());
+        assert_eq!(state.bots[0].bid, Bid(1));
+        assert_eq!(
+            state.bots[0].seeds,
+            (4..21).map(|i| Bid(i)).collect::<Vec<Bid>>()
+        );
+        assert_eq!(output.vc, expected_vc);
+        assert_eq!(output.added_bots.len(), 1);
+        assert_eq!(output.added_bots[0].pos, Position::new(1, 0, 0));
+        assert_eq!(output.added_bots[0].bid, Bid(2));
+        assert_eq!(output.added_bots[0].seeds, vec![Bid(3)]);
+    }
+    {
+        let mut state = State::initial(3);
+        let r = state.update_one(0, &Command::Fission(NCD::new(-1, 0, 0), 1));
+        assert!(r.is_err());
+    }
+    {
+        let mut state = State::initial(3);
+        let r = state.update_one(0, &Command::Fission(NCD::new(1, 0, 0), 19));
+        assert!(r.is_err());
+    }
+    {
+        let mut state = State::initial(3);
+        let r = state.update_one(0, &Command::Fission(NCD::new(1, 0, 0), 0));
+        assert!(r.is_ok());
+    }
+    {
+        let mut state = State::initial(3);
+        state.bots[0].seeds = vec![];
+        let r = state.update_one(0, &Command::Fission(NCD::new(1, 0, 0), 0));
+        assert!(r.is_err());
+    }
+}
+
+#[test]
+fn test_fusion_command() {
+    {
+        let mut state = State::initial(3);
+        state
+            .update_time_step(&vec![Command::Fission(NCD::new(1, 0, 0), 1)])
+            .unwrap();
+        assert_eq!(state.energy, 3 * 3 * 3 * 3 + 20 + 24);
+
+        state
+            .update_time_step(&vec![
+                Command::FusionP(NCD::new(1, 0, 0)),
+                Command::FusionS(NCD::new(-1, 0, 0)),
+            ])
+            .unwrap();
+
+        assert_eq!(state.bots.len(), 1);
+        assert_eq!(state.bots[0].bid, Bid(1));
+        assert_eq!(
+            state.bots[0].seeds,
+            (2..21).map(|i| Bid(i)).collect::<Vec<Bid>>()
+        );
+        assert_eq!(state.energy, 3 * 3 * 3 * 3 * 2 + 20 + 40);
+    }
+
+    {
+        let mut state = State::initial(3);
+        let r = state.update_time_step(&vec![Command::FusionP(NCD::new(1, 0, 0))]);
+        assert!(r.is_err());
+    }
+
+    {
+        let mut state = State::initial(3);
+        state
+            .update_time_step(&vec![Command::Fission(NCD::new(1, 0, 0), 1)])
+            .unwrap();
+        let r = state.update_time_step(&vec![Command::FusionP(NCD::new(1, 0, 0)), Command::Wait]);
+        assert!(r.is_err());
+    }
+
+    {
+        let mut state = State::initial(3);
+        state
+            .update_time_step(&vec![Command::Fission(NCD::new(1, 0, 0), 1)])
+            .unwrap();
+        let r = state.update_time_step(&vec![Command::Wait, Command::FusionS(NCD::new(-1, 0, 0))]);
+        assert!(r.is_err());
+    }
+
+    {
+        let mut state = State::initial(3);
+        state
+            .update_time_step(&vec![Command::Fission(NCD::new(1, 0, 0), 5)])
+            .unwrap();
+        state
+            .update_time_step(&vec![
+                Command::Fission(NCD::new(1, 1, 0), 1),
+                Command::Fission(NCD::new(-1, 1, 0), 1),
+            ])
+            .unwrap();
+        let r = state.update_time_step(&vec![
+            Command::FusionP(NCD::new(1, 0, 0)),
+            Command::FusionS(NCD::new(-1, 0, 0)),
+            Command::FusionP(NCD::new(1, 0, 0)),
+            Command::FusionS(NCD::new(-1, 0, 0)),
+        ]);
+        assert!(r.is_ok());
+    }
+
+    {
+        let mut state = State::initial(3);
+        state
+            .update_time_step(&vec![Command::Fission(NCD::new(1, 0, 0), 5)])
+            .unwrap();
+        state
+            .update_time_step(&vec![
+                Command::Fission(NCD::new(1, 1, 0), 1),
+                Command::Fission(NCD::new(-1, 1, 0), 1),
+            ])
+            .unwrap();
+        let r = state.update_time_step(&vec![
+            Command::FusionP(NCD::new(1, 0, 0)),
+            Command::FusionS(NCD::new(-1, 1, 0)),
+            Command::FusionP(NCD::new(1, 0, 0)),
+            Command::FusionS(NCD::new(-1, -1, 0)),
+        ]);
+        // println!("{:?}", r);
         assert!(r.is_err());
     }
 }
@@ -374,5 +742,69 @@ fn test_update_time_step() {
         assert_eq!(state.energy, expected_energy);
     }
 
-    // TODO interfere check
+    {
+        let mut state = State::initial(3);
+        state
+            .update_time_step(&vec![Command::Fission(NCD::new(1, 0, 0), 5)])
+            .unwrap();
+        state
+            .update_time_step(&vec![
+                Command::Fission(NCD::new(0, 1, 0), 1),
+                Command::Fission(NCD::new(1, 1, 0), 1),
+            ])
+            .unwrap();
+
+        assert_eq!(
+            state.bots.iter().map(|bot| bot.bid).collect::<Vec<_>>(),
+            vec![Bid(1), Bid(2), Bid(3), Bid(8)]
+        )
+    }
+
+    {
+        let mut state = State::initial(3);
+        state.update_time_step(&vec![Command::Fission(NCD::new(1, 0, 0), 0)]);
+        let commands = vec![Command::Wait, Command::SMove(LLCD::new(-1, 0, 0))];
+        let r = state.update_time_step(&commands);
+        assert!(r.is_err());
+    }
+
+    {
+        // xxx
+        // xxx
+        // 12x
+
+        // x2x
+        // 131
+        // 12x
+        let mut state = State::initial(3);
+        state.update_time_step(&vec![Command::Fission(NCD::new(1, 0, 0), 0)]);
+        let commands = vec![
+            Command::LMove(SLCD::new(0, 1, 0), SLCD::new(2, 0, 0)),
+            Command::SMove(LLCD::new(0, 2, 0)),
+        ];
+        let r = state.update_time_step(&commands);
+        assert!(r.is_err());
+    }
+
+    {
+        let mut state = State::initial(3);
+        let r = state.update_time_step(&vec![Command::Fill(NCD::new(0, 1, 0))]);
+        //println!("{:?}", r);
+        assert!(r.is_err());
+    }
+
+    {
+        let mut state = State::initial(3);
+        state.update_time_step(&vec![Command::Flip]).unwrap();
+        state
+            .update_time_step(&vec![Command::Fill(NCD::new(0, 1, 0))])
+            .unwrap();
+    }
+
+    {
+        let mut state = State::initial(3);
+        state
+            .update_time_step(&vec![Command::Fill(NCD::new(0, 0, 1))])
+            .unwrap();
+    }
 }

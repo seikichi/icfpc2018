@@ -6,19 +6,19 @@ use std::io::Write;
 use std::ops::Add;
 use std::path::Path;
 
-#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug)]
 pub enum Harmonics {
     Low,
     High,
 }
 
-#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug)]
 pub enum Voxel {
     Full,
     Void,
 }
 
-#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug)]
 pub enum Command {
     // singleton
     Halt,
@@ -32,6 +32,7 @@ pub enum Command {
     FusionP(NCD),
     FusionS(NCD),
 }
+
 impl Command {
     pub fn encode(&self) -> Vec<u8> {
         match self {
@@ -123,7 +124,7 @@ impl fmt::Display for CD {
     }
 }
 
-#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug)]
 pub struct NCD {
     x: i32,
     y: i32,
@@ -159,7 +160,7 @@ fn ncd_encode_test() {
     assert_eq!(ncd.encode(), 18 + 3 + 1);
 }
 
-#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug)]
 pub struct SLCD {
     x: i32,
     y: i32,
@@ -208,7 +209,7 @@ fn slcd_encode_test() {
     assert_eq!(enc.1, 2);
 }
 
-#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug)]
 pub struct LLCD {
     pub x: i32,
     pub y: i32,
@@ -272,6 +273,10 @@ impl Position {
     pub fn zero() -> Position {
         Position { x: 0, y: 0, z: 0 }
     }
+
+    pub fn index(&self, r: usize) -> usize {
+        (self.x as usize) + (self.y as usize) * r + (self.z as usize) * r * r
+    }
 }
 
 impl fmt::Display for Position {
@@ -295,6 +300,18 @@ impl<'a> Add<&'a CD> for Position {
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug, Hash)]
 pub struct Region(Position, Position);
 
+impl CD for Position {
+    fn x(&self) -> i32 {
+        self.x
+    }
+    fn y(&self) -> i32 {
+        self.y
+    }
+    fn z(&self) -> i32 {
+        self.z
+    }
+}
+
 pub fn region(p1: Position, p2: Position) -> impl Iterator<Item = Position> {
     (min(p1.z, p2.z)..max(p1.z, p2.z) + 1).flat_map(move |z| {
         (min(p1.y, p2.y)..max(p1.y, p2.y) + 1).flat_map(move |y| {
@@ -303,14 +320,32 @@ pub fn region(p1: Position, p2: Position) -> impl Iterator<Item = Position> {
     })
 }
 
-#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug, Hash)]
 pub struct Bid(pub usize);
 
-#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
+#[derive(Eq, Clone, Debug)]
 pub struct Nanobot {
     pub bid: Bid,
     pub pos: Position,
     pub seeds: Vec<Bid>,
+}
+
+impl Ord for Nanobot {
+    fn cmp(&self, other: &Nanobot) -> Ordering {
+        self.bid.cmp(&other.bid)
+    }
+}
+
+impl PartialOrd for Nanobot {
+    fn partial_cmp(&self, other: &Nanobot) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for Nanobot {
+    fn eq(&self, other: &Nanobot) -> bool {
+        self.bid == other.bid
+    }
 }
 
 pub fn encode_trace(trace: &[Command]) -> Vec<u8> {

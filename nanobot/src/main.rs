@@ -2,6 +2,7 @@ mod ai;
 mod common;
 mod model;
 mod state;
+mod union_find;
 
 use std::env;
 use std::fs::File;
