@@ -292,6 +292,9 @@ impl<'a> Add<&'a CD> for Position {
     }
 }
 
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug, Hash)]
+pub struct Region(Position, Position);
+
 pub fn region(p1: Position, p2: Position) -> impl Iterator<Item = Position> {
     (min(p1.z, p2.z)..max(p1.z, p2.z) + 1).flat_map(move |z| {
         (min(p1.y, p2.y)..max(p1.y, p2.y) + 1).flat_map(move |y| {
