@@ -56,10 +56,10 @@ impl Error for SimulationError {
 
 type VolatileCoordinates = HashSet<Position>;
 
-struct UpdateOneOutput {
-    vc: VolatileCoordinates,
-    added_bots: Vec<Nanobot>,
-    deleted_bot_bids: Vec<Bid>,
+pub struct UpdateOneOutput {
+    pub vc: VolatileCoordinates,
+    pub added_bots: Vec<Nanobot>,
+    pub deleted_bot_bids: Vec<Bid>,
 }
 
 impl UpdateOneOutput {
@@ -79,6 +79,13 @@ impl UpdateOneOutput {
 fn single_volatile_coordinate(p: Position) -> VolatileCoordinates {
     let mut vc = VolatileCoordinates::new();
     vc.insert(p);
+    vc
+}
+
+fn couple_volatile_coordinates(p1: Position, p2: Position) -> VolatileCoordinates {
+    let mut vc = VolatileCoordinates::new();
+    vc.insert(p1);
+    vc.insert(p2);
     vc
 }
 
@@ -184,6 +191,36 @@ impl State {
                 vc.insert(new_c);
 
                 Ok(UpdateOneOutput::from_vc(vc))
+            }
+
+            Command::Fission(ncd, m) => {
+                let new_c = c + ncd;
+                if !self.is_valid_coordinate(&new_c) {
+                    let message = format!("nanobot is out of matrix: command=Fission, c={}", new_c);
+                    return Err(Box::new(SimulationError::new(message)));
+                }
+
+                let mut bot = &mut self.bots[nanobot_index];
+                if *m > bot.seeds.len() {
+                    let message = format!("too large m: command=Fission, nanobot_index={}, m={}, len={}", nanobot_index, m, bot.seeds.len());
+                    return Err(Box::new(SimulationError::new(message)));
+                }
+
+                let new_bot = Nanobot {
+                    bid: bot.seeds[0],
+                    pos: new_c,
+                    seeds: bot.seeds[1..m+1].to_vec(),
+                };
+
+                bot.seeds = bot.seeds[m+1..].to_vec();
+
+                self.energy += 24;
+
+                Ok(UpdateOneOutput{
+                    vc: couple_volatile_coordinates(c, new_c),
+                    added_bots: vec![new_bot],
+                    deleted_bot_bids: vec![],
+                })
             }
 
             _ => unimplemented!(),
