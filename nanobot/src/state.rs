@@ -1,6 +1,7 @@
 use common::*;
 use std::error::*;
 use std::fmt;
+use std::collections::HashSet;
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
 pub struct State {
@@ -52,12 +53,20 @@ impl Error for SimulationError {
     }
 }
 
+type VolatileCoordinates = HashSet<Position>;
+
+fn single_volatile_coordinate(p: Position) -> VolatileCoordinates {
+    let mut vc = VolatileCoordinates::new();
+    vc.insert(p);
+    vc
+}
+
 impl State {
     pub fn update_one(
         &mut self,
         nanobot_index: usize,
         command: &Command,
-    ) -> Result<(), Box<Error>> {
+    ) -> Result<VolatileCoordinates, Box<Error>> {
         let c = self.bots[nanobot_index].pos;
         match command {
             Command::Halt => {
@@ -80,17 +89,20 @@ impl State {
                     return Err(Box::new(SimulationError::new(message)));
                 }
                 self.bots.pop();
-                Ok(())
+
+                Ok(single_volatile_coordinate(c))
             }
 
-            Command::Wait => Ok(()),
+            Command::Wait => {
+                Ok(single_volatile_coordinate(c))
+            },
 
             Command::Flip => {
                 self.harmonics = match self.harmonics {
                     Harmonics::Low => Harmonics::High,
                     Harmonics::High => Harmonics::Low,
                 };
-                Ok(())
+                Ok(single_volatile_coordinate(c))
             }
 
             Command::SMove(llcd) => {
@@ -98,10 +110,11 @@ impl State {
             }
 
             Command::LMove(slcd1, slcd2) => {
-                self.move_straight(slcd1, nanobot_index, command)?;
-                self.move_straight(slcd2, nanobot_index, command)?;
+                let vc1 = self.move_straight(slcd1, nanobot_index, command)?;
+                let vc2 = self.move_straight(slcd2, nanobot_index, command)?;
                 self.energy += 4;
-                Ok(())
+
+                Ok(vc1.union(&vc2).map(|p| *p).collect())
             }
 
             Command::Fill(ncd) => {
@@ -121,23 +134,29 @@ impl State {
                     Voxel::Full => self.energy += 6,
                 }
 
-                Ok(())
+                let mut vc = VolatileCoordinates::new();
+                vc.insert(c);
+                vc.insert(new_c);
+
+                Ok(vc)
             }
 
             _ => unimplemented!(),
         }
     }
 
-    fn move_straight(&mut self, diff: &CD, nanobot_index: usize, command: &Command) -> Result<(), Box<Error>> {
+    fn move_straight(&mut self, diff: &CD, nanobot_index: usize, command: &Command) -> Result<VolatileCoordinates, Box<Error>> {
         let c = self.bots[nanobot_index].pos;
         let new_c = c + diff;
         if !self.is_valid_coordinate(&new_c) {
             let message = format!("nanobot is out of matrix: command={:?}, c={}", command, new_c);
             return Err(Box::new(SimulationError::new(message)));
         }
+
         self.bots[nanobot_index].pos = new_c;
         self.energy += 2 * diff.manhattan_length() as i64;
-        Ok(())
+
+        Ok(region(c, new_c).collect())
     }
 
     fn is_valid_coordinate(&self, p: &Position) -> bool {
