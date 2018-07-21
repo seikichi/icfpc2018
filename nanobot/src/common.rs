@@ -3,6 +3,7 @@ use std::fs;
 use std::io::Write;
 use std::path::Path;
 use std::ops::Add;
+use std::fmt;
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
 pub enum Harmonics {
@@ -114,6 +115,12 @@ pub trait CD {
     }
 }
 
+impl fmt::Display for CD {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "({}, {}, {})", self.x(), self.y(), self.z())
+    }
+}
+
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
 pub struct NCD {
     x: i32,
@@ -131,6 +138,7 @@ impl NCD {
         ((self.x + 1) * 9 + (self.y + 1) * 3 + (self.z + 1)) as u8
     }
 }
+
 impl CD for NCD {
     fn x(&self) -> i32 {
         self.x
@@ -155,6 +163,7 @@ pub struct SLCD {
     y: i32,
     z: i32,
 }
+
 impl SLCD {
     fn new(x: i32, y: i32, z: i32) -> Self {
         let slcd = SLCD { x, y, z };
@@ -176,6 +185,7 @@ impl SLCD {
         (ret.0, ret.1 as u8)
     }
 }
+
 impl CD for SLCD {
     fn x(&self) -> i32 {
         self.x
@@ -187,6 +197,7 @@ impl CD for SLCD {
         self.z
     }
 }
+
 #[test]
 fn slcd_encode_test() {
     let slcd = SLCD::new(-3, 0, 0);
@@ -201,6 +212,7 @@ pub struct LLCD {
     y: i32,
     z: i32,
 }
+
 impl LLCD {
     fn new(x: i32, y: i32, z: i32) -> Self {
         let llcd = LLCD { x, y, z };
@@ -222,6 +234,7 @@ impl LLCD {
         (ret.0, ret.1 as u8)
     }
 }
+
 impl CD for LLCD {
     fn x(&self) -> i32 {
         self.x
@@ -233,6 +246,7 @@ impl CD for LLCD {
         self.z
     }
 }
+
 #[test]
 fn llcd_encode_test() {
     let llcd = LLCD::new(0, 10, 0);
@@ -251,6 +265,12 @@ pub struct Position {
 impl Position {
     pub fn new(x: i32, y: i32, z: i32) -> Position {
         Position { x, y, z }
+    }
+}
+
+impl fmt::Display for Position {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "({}, {}, {})", self.x, self.y, self.z)
     }
 }
 
