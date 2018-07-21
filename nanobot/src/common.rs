@@ -24,6 +24,49 @@ pub enum Command {
     FusionP(NCD),
     FusionS(NCD),
 }
+impl Command {
+    fn encode(&self) -> Vec<u8> {
+        match self {
+            Command::Halt => vec![0b11111111],
+            Command::Wait => vec![0b11111110],
+            Command::Flip => vec![0b11111101],
+            Command::SMove(lcd) => {
+                let lcd_enc = lcd.encode();
+                vec![lcd_enc.0 << 4 | 0b0100, lcd_enc.1]
+            }
+            Command::LMove(lcd1, lcd2) => {
+                let lcd1_enc = lcd1.encode();
+                let lcd2_enc = lcd2.encode();
+                vec![
+                    (lcd2_enc.0 << 6) | (lcd1_enc.0 << 4) | 0b1100,
+                    (lcd2_enc.1 << 4) | lcd1_enc.1,
+                ]
+            }
+            Command::Fission(ncd, m) => {
+                let ncd_enc = ncd.encode();
+                vec![(ncd_enc << 3) | 0b101, *m as u8]
+            }
+            Command::Fill(ncd) => {
+                let ncd_enc = ncd.encode();
+                vec![(ncd_enc << 3) | 0b011]
+            }
+            Command::FusionP(ncd) => {
+                let ncd_enc = ncd.encode();
+                vec![(ncd_enc << 3) | 0b111]
+            }
+            Command::FusionS(ncd) => {
+                let ncd_enc = ncd.encode();
+                vec![(ncd_enc << 3) | 0b110]
+            }
+        }
+    }
+}
+#[test]
+fn command_encode_test() {
+    let flip = Command::Flip.encode();
+    assert_eq!(flip.len(), 1);
+    assert_eq!(flip[0], 0b11111101);
+}
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
 pub struct NCD {
