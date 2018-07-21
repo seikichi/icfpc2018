@@ -4,13 +4,19 @@ use std::collections::HashSet;
 use std::error::*;
 use std::fmt;
 use std::iter::Extend;
+use union_find::*;
 
-#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct State {
     energy: i64,
     harmonics: Harmonics,
     matrix: Vec<Vec<Vec<Voxel>>>,
     bots: Vec<Nanobot>,
+
+    // grounded かどうかの判定に使う。
+    // r*r*r 番目の要素は床を表す仮想の要素。
+    connectivity: UnionFind,
+    full_voxel_count: i32,
 }
 
 impl State {
@@ -26,6 +32,8 @@ impl State {
             harmonics: Harmonics::Low,
             matrix: vec![vec![vec![Voxel::Void; r]; r]; r],
             bots: vec![bot],
+            connectivity: UnionFind::new(r * r * r + 1),
+            full_voxel_count: 0,
         }
     }
 }
@@ -158,6 +166,13 @@ impl State {
         self.bots.extend(added_bots);
         self.bots.sort();
 
+        if self.harmonics == Harmonics::Low
+            && self.connectivity.size(r * r * r) - 1 != self.full_voxel_count as usize
+        {
+            let message = format!("floating full voxel exists when harmonics is low");
+            return Err(Box::new(SimulationError::new(message)));
+        }
+
         Ok(())
     }
 
@@ -167,6 +182,8 @@ impl State {
         command: &Command,
     ) -> Result<UpdateOneOutput, Box<Error>> {
         let c = self.bots[nanobot_index].pos;
+        let r = self.matrix.len();
+
         match command {
             Command::Halt => {
                 if c != Position::new(0, 0, 0) {
@@ -224,11 +241,27 @@ impl State {
                     return Err(Box::new(SimulationError::new(message)));
                 }
 
-                match self.matrix[new_c.z as usize][new_c.y as usize][new_c.x as usize] {
+                match self.voxel_at(new_c) {
                     Voxel::Void => {
-                        self.matrix[new_c.z as usize][new_c.y as usize][new_c.x as usize] =
-                            Voxel::Full;
-                        self.energy += 12
+                        self.set_voxel_at(new_c, Voxel::Full);
+                        self.energy += 12;
+
+                        for p in region(
+                            new_c + &Position::new(-1, -1, -1),
+                            new_c + &Position::new(1, 1, 1),
+                        ) {
+                            if new_c != p
+                                && self.is_valid_coordinate(&p)
+                                && self.voxel_at(p) == Voxel::Full
+                            {
+                                self.connectivity.union_set(new_c.index(r), p.index(r));
+                            }
+                        }
+
+                        if new_c.y == 0 {
+                            self.connectivity.union_set(new_c.index(r), r * r * r);
+                        }
+                        self.full_voxel_count += 1;
                     }
                     Voxel::Full => self.energy += 6,
                 }
@@ -311,6 +344,14 @@ impl State {
         }
     }
 
+    fn voxel_at(&self, p: Position) -> Voxel {
+        self.matrix[p.z as usize][p.y as usize][p.x as usize]
+    }
+
+    fn set_voxel_at(&mut self, p: Position, v: Voxel) {
+        self.matrix[p.z as usize][p.y as usize][p.x as usize] = v
+    }
+
     fn find_bot_by_coordinate(&self, p: Position) -> Option<usize> {
         for (i, bot) in self.bots.iter().enumerate() {
             if bot.pos == p {
@@ -361,6 +402,11 @@ impl State {
             return false;
         }
         true
+    }
+
+    fn is_grounded(&mut self, p: &Position) -> bool {
+        let r = self.matrix.len();
+        self.connectivity.find_set(p.index(r), r * r * r)
     }
 }
 
@@ -495,22 +541,31 @@ fn test_fill_command() {
             .update_one(0, &Command::Fill(NCD::new(1, 0, 0)))
             .unwrap()
             .vc;
-        let mut expected_vc = VolatileCoordinates::new();
-        expected_vc.insert(Position::new(0, 0, 0));
-        expected_vc.insert(Position::new(1, 0, 0));
         assert_eq!(state.matrix[0][0][1], Voxel::Full);
         assert_eq!(state.energy, 12);
-        assert_eq!(vc, expected_vc);
+        assert_eq!(
+            vc,
+            couple_volatile_coordinates(Position::new(0, 0, 0), Position::new(1, 0, 0))
+        );
+        assert!(state.is_grounded(&Position::new(1, 0, 0)));
+
         state
             .update_one(0, &Command::Fill(NCD::new(1, 0, 0)))
             .unwrap();
         assert_eq!(state.energy, 18);
+
+        state
+            .update_one(0, &Command::Fill(NCD::new(1, 1, 0)))
+            .unwrap();
+        assert!(state.is_grounded(&Position::new(1, 1, 0)));
     }
+
     {
         let mut state = State::initial(3);
         let r = state.update_one(0, &Command::Fill(NCD::new(-1, 0, 0)));
         assert!(r.is_err());
     }
+
     {
         let mut state = State::initial(3);
         state
@@ -518,6 +573,14 @@ fn test_fill_command() {
             .unwrap();
         let r = state.update_one(0, &Command::Fill(NCD::new(1, 0, 0)));
         assert!(r.is_err());
+    }
+
+    {
+        let mut state = State::initial(3);
+        state
+            .update_one(0, &Command::Fill(NCD::new(0, 1, 0)))
+            .unwrap();
+        assert!(!state.is_grounded(&Position::new(0, 1, 0)));
     }
 }
 
@@ -721,5 +784,27 @@ fn test_update_time_step() {
         ];
         let r = state.update_time_step(&commands);
         assert!(r.is_err());
+    }
+
+    {
+        let mut state = State::initial(3);
+        let r = state.update_time_step(&vec![Command::Fill(NCD::new(0, 1, 0))]);
+        //println!("{:?}", r);
+        assert!(r.is_err());
+    }
+
+    {
+        let mut state = State::initial(3);
+        state.update_time_step(&vec![Command::Flip]).unwrap();
+        state
+            .update_time_step(&vec![Command::Fill(NCD::new(0, 1, 0))])
+            .unwrap();
+    }
+
+    {
+        let mut state = State::initial(3);
+        state
+            .update_time_step(&vec![Command::Fill(NCD::new(0, 0, 1))])
+            .unwrap();
     }
 }
