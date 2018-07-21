@@ -365,6 +365,12 @@ fn test_smove_command() {
         let r = state.update_one(0, &Command::SMove(LLCD::new(3, 0, 0)));
         assert!(r.is_err());
     }
+    {
+        let mut state = State::initial(3);
+        state.update_one(0, &Command::Fill(NCD::new(1, 0, 0)));
+        let r = state.update_one(0, &Command::SMove(LLCD::new(1, 0, 0)));
+        assert!(r.is_err());
+    }
 }
 
 #[test]
