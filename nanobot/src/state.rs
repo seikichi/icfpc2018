@@ -1,10 +1,10 @@
 use common::*;
-use union_find::*;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::error::*;
 use std::fmt;
 use std::iter::Extend;
+use union_find::*;
 
 #[derive(Clone, Debug)]
 pub struct State {
@@ -166,8 +166,9 @@ impl State {
         self.bots.extend(added_bots);
         self.bots.sort();
 
-        if self.harmonics == Harmonics::Low &&
-            self.connectivity.size(r * r * r) - 1 != self.full_voxel_count as usize {
+        if self.harmonics == Harmonics::Low
+            && self.connectivity.size(r * r * r) - 1 != self.full_voxel_count as usize
+        {
             let message = format!("floating full voxel exists when harmonics is low");
             return Err(Box::new(SimulationError::new(message)));
         }
@@ -247,8 +248,12 @@ impl State {
 
                         for p in region(
                             new_c + &Position::new(-1, -1, -1),
-                            new_c + &Position::new(1, 1, 1)) {
-                            if new_c != p && self.is_valid_coordinate(&p) && self.voxel_at(p) == Voxel::Full {
+                            new_c + &Position::new(1, 1, 1),
+                        ) {
+                            if new_c != p
+                                && self.is_valid_coordinate(&p)
+                                && self.voxel_at(p) == Voxel::Full
+                            {
                                 self.connectivity.union_set(new_c.index(r), p.index(r));
                             }
                         }
@@ -401,7 +406,7 @@ impl State {
 
     fn is_grounded(&mut self, p: &Position) -> bool {
         let r = self.matrix.len();
-        self.connectivity.find_set(p.index(r), r*r*r)
+        self.connectivity.find_set(p.index(r), r * r * r)
     }
 }
 
@@ -538,7 +543,10 @@ fn test_fill_command() {
             .vc;
         assert_eq!(state.matrix[0][0][1], Voxel::Full);
         assert_eq!(state.energy, 12);
-        assert_eq!(vc, couple_volatile_coordinates(Position::new(0, 0, 0), Position::new(1, 0, 0)));
+        assert_eq!(
+            vc,
+            couple_volatile_coordinates(Position::new(0, 0, 0), Position::new(1, 0, 0))
+        );
         assert!(state.is_grounded(&Position::new(1, 0, 0)));
 
         state
@@ -569,7 +577,9 @@ fn test_fill_command() {
 
     {
         let mut state = State::initial(3);
-        state.update_one(0, &Command::Fill(NCD::new(0, 1, 0))).unwrap();
+        state
+            .update_one(0, &Command::Fill(NCD::new(0, 1, 0)))
+            .unwrap();
         assert!(!state.is_grounded(&Position::new(0, 1, 0)));
     }
 }
@@ -786,11 +796,15 @@ fn test_update_time_step() {
     {
         let mut state = State::initial(3);
         state.update_time_step(&vec![Command::Flip]).unwrap();
-        state.update_time_step(&vec![Command::Fill(NCD::new(0, 1, 0))]).unwrap();
+        state
+            .update_time_step(&vec![Command::Fill(NCD::new(0, 1, 0))])
+            .unwrap();
     }
 
     {
         let mut state = State::initial(3);
-        state.update_time_step(&vec![Command::Fill(NCD::new(0, 0, 1))]).unwrap();
+        state
+            .update_time_step(&vec![Command::Fill(NCD::new(0, 0, 1))])
+            .unwrap();
     }
 }

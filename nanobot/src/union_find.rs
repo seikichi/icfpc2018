@@ -7,7 +7,9 @@ pub struct UnionFind {
 
 impl UnionFind {
     pub fn new(n: usize) -> UnionFind {
-        UnionFind { parent: vec![-1; n] }
+        UnionFind {
+            parent: vec![-1; n],
+        }
     }
     pub fn root(&mut self, x: usize) -> usize {
         let p = self.parent[x];
@@ -16,13 +18,17 @@ impl UnionFind {
         } else {
             self.parent[x] = self.root(p as usize) as i32;
             self.parent[x] as usize
-        }
+        };
     }
     pub fn union_set(&mut self, x: usize, y: usize) -> bool {
         let mut x = self.root(x);
         let mut y = self.root(y);
-        if x == y { return false; }
-        if self.parent[y] < self.parent[x] { mem::swap(&mut x, &mut y); }
+        if x == y {
+            return false;
+        }
+        if self.parent[y] < self.parent[x] {
+            mem::swap(&mut x, &mut y);
+        }
         self.parent[x] += self.parent[y];
         self.parent[y] = x as i32;
         true
