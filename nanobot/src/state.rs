@@ -147,6 +147,33 @@ impl State {
 
 #[test]
 fn test_halt_command() {
-    let state = State::initial(3);
-    assert!(true);
+    {
+        let mut state = State::initial(3);
+        state.update_one(0, &Command::Halt).unwrap();
+        assert_eq!(state.bots.len(), 0);
+    }
+
+    {
+        let mut state = State::initial(3);
+        state.update_one(0, &Command::SMove(LLCD::new(1, 0, 0))).unwrap();
+        let r = state.update_one(0, &Command::Halt);
+        assert!(r.is_err());
+    }
+
+    {
+        let mut state = State::initial(3);
+        state.update_one(0, &Command::Flip).unwrap();
+        let r = state.update_one(0, &Command::Halt);
+        assert!(r.is_err());
+    }
+
+    {
+        let mut state = State::initial(3);
+
+        let new_bot = state.bots[0].clone();
+        state.bots.push(new_bot);     // FIXME: 後でFissionにする
+
+        let r = state.update_one(0, &Command::Halt);
+        assert!(r.is_err());
+    }
 }
