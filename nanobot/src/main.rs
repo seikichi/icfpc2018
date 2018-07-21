@@ -35,6 +35,5 @@ fn main() {
     let ai = SimpleAI::new();
     let commands = ai.generate(&model);
 
-    println!("{:?}", commands);
     write_trace_file(trace_output_path, &commands).expect("failed to write trace");
 }
