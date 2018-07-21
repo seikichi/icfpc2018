@@ -1,3 +1,4 @@
+use ai::utils::*;
 use ai::AI;
 use common::*;
 use model::*;
@@ -14,9 +15,93 @@ impl GridFissionAI {
 
 impl AI for GridFissionAI {
     fn generate(&self, model: &Model) -> Vec<Command> {
+        let bounding = match calc_bounding_box(model) {
+            Some(b) => b,
+            None => {
+                return vec![Command::Halt];
+            }
+        };
+        let x_size = (bounding.max_x - bounding.min_x + 1) as usize;
+        let z_size = (bounding.max_z - bounding.min_z + 1) as usize;
+
+        // TODO FIX ME;
+        let xsplit = 3;
+        let zsplit = 3;
+
         let mut commands = vec![];
-        commands.extend(generate_devide_commands((17, 15), (4, 4)));
-        commands.extend(generate_concur_commands((17, 15), (4, 4)));
+        commands.extend(move_straight_x(bounding.min_x));
+        commands.extend(move_straight_z(bounding.min_z));
+        commands.push(Command::Flip);
+        commands.extend(generate_devide_commands((x_size, z_size), (xsplit, zsplit)));
+
+        let mut commands_list: Vec<Vec<Command>> = vec![];
+
+        let mut x_width_list = vec![];
+        let mut z_width_list = vec![];
+        for i in 0..xsplit {
+            let width = (x_size / xsplit) as i32 + if i < x_size % xsplit { 1 } else { 0 };
+            x_width_list.push(width);
+        }
+        for i in 0..zsplit {
+            let width = (z_size / zsplit) as i32 + if i < z_size % zsplit { 1 } else { 0 };
+            z_width_list.push(width);
+        }
+
+        // 1st line
+        for i in 0..xsplit {
+            let mut x = 0;
+            for j in 0..i {
+                x += x_width_list[j];
+            }
+            let initial = Position::new(x, 0, bounding.min_z);
+            let size = Position::new(x_width_list[i], bounding.max_y, z_width_list[0]);
+            commands_list.push(generate_region_commands(model, initial, size));
+        }
+        // others
+        for ri in 0..xsplit {
+            let i = xsplit - ri - 1;
+            let mut x = 0;
+            for j in 0..i {
+                x += x_width_list[j];
+            }
+            let x_width = x_width_list[i];
+
+            for j in 1..zsplit {
+                let mut z = 0;
+                for k in 0..j {
+                    z += z_width_list[k];
+                }
+                let z_width = z_width_list[j];
+
+                let initial = Position::new(x, 0, z);
+                let size = Position::new(x_width, bounding.max_y, z_width);
+                commands_list.push(generate_region_commands(model, initial, size));
+            }
+        }
+
+        let mut index = 0;
+        loop {
+            let mut all_wait = true;
+            for v in commands_list.iter() {
+                commands.push(if index >= v.len() {
+                    Command::Wait
+                } else {
+                    all_wait = false;
+                    v[index].clone()
+                });
+            }
+            index += 1;
+            if all_wait {
+                break;
+            }
+        }
+
+        commands.extend(generate_concur_commands((x_size, z_size), (xsplit, zsplit)));
+        commands.extend(move_straight_x(-bounding.min_x));
+        commands.extend(move_straight_z(-bounding.min_z));
+        commands.extend(move_straight_y(-(bounding.max_y + 1)));
+        commands.push(Command::Flip);
+        commands.push(Command::Halt);
         commands
     }
 }
