@@ -3,12 +3,12 @@ use std::error::*;
 use std::io::BufRead;
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
-struct Model {
+pub struct Model {
     matrix: Vec<Vec<Vec<Voxel>>>,
 }
 
 impl Model {
-    fn new<T: BufRead>(reader: &mut T) -> Result<Self, Box<Error>> {
+    pub fn new<T: BufRead>(reader: &mut T) -> Result<Self, Box<Error>> {
         let mut buffer = [0; 1];
         reader.read(&mut buffer)?;
         let R: usize = buffer[0] as usize;
