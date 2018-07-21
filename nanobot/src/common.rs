@@ -32,7 +32,7 @@ pub enum Command {
     FusionS(NCD),
 }
 impl Command {
-    fn encode(&self) -> Vec<u8> {
+    pub fn encode(&self) -> Vec<u8> {
         match self {
             Command::Halt => vec![0b11111111],
             Command::Wait => vec![0b11111110],
@@ -68,6 +68,7 @@ impl Command {
         }
     }
 }
+
 #[test]
 fn command_encode_test() {
     let flip = Command::Flip.encode();
@@ -134,7 +135,7 @@ impl NCD {
         assert!(ncd.manhattan_length() <= 2 && ncd.chessboard_length() == 1);
         ncd
     }
-    fn encode(&self) -> u8 {
+    pub fn encode(&self) -> u8 {
         ((self.x + 1) * 9 + (self.y + 1) * 3 + (self.z + 1)) as u8
     }
 }
@@ -165,7 +166,7 @@ pub struct SLCD {
 }
 
 impl SLCD {
-    fn new(x: i32, y: i32, z: i32) -> Self {
+    pub fn new(x: i32, y: i32, z: i32) -> Self {
         let slcd = SLCD { x, y, z };
         assert!(
             slcd.manhattan_length() <= 5
@@ -174,7 +175,7 @@ impl SLCD {
         );
         slcd
     }
-    fn encode(&self) -> (u8, u8) {
+    pub fn encode(&self) -> (u8, u8) {
         let ret = if self.x != 0 {
             (0b01, self.x + 5)
         } else if self.y != 0 {
@@ -214,7 +215,7 @@ pub struct LLCD {
 }
 
 impl LLCD {
-    fn new(x: i32, y: i32, z: i32) -> Self {
+    pub fn new(x: i32, y: i32, z: i32) -> Self {
         let llcd = LLCD { x, y, z };
         assert!(
             llcd.manhattan_length() <= 15
@@ -223,7 +224,7 @@ impl LLCD {
         );
         llcd
     }
-    fn encode(&self) -> (u8, u8) {
+    pub fn encode(&self) -> (u8, u8) {
         let ret = if self.x != 0 {
             (0b01, self.x + 15)
         } else if self.y != 0 {
@@ -303,6 +304,7 @@ pub fn encode_trace(trace: &[Command]) -> Vec<u8> {
     }
     ret
 }
+
 #[test]
 fn encode_trace_test() {
     let fusions = Command::FusionS(NCD::new(1, -1, 0));
