@@ -3,6 +3,8 @@ use ai::AI;
 use common::*;
 use model::*;
 
+use std::cmp::min;
+use std::env;
 use std::iter::repeat;
 
 pub struct GridFissionAI {}
@@ -25,8 +27,8 @@ impl AI for GridFissionAI {
         let z_size = (bounding.max_z - bounding.min_z + 1) as usize;
 
         // TODO FIX ME;
-        let xsplit = 4;
-        let zsplit = 5;
+        let xsplit = min(x_size, 4);
+        let zsplit = min(z_size, 5);
 
         let mut commands = vec![];
         commands.extend(move_straight_x(bounding.min_x));
@@ -55,9 +57,6 @@ impl AI for GridFissionAI {
             }
             let initial = Position::new(x, 0, bounding.min_z);
             let size = Position::new(x_width_list[i], bounding.max_y, z_width_list[0]);
-            // println!("bounding = {:?}", bounding);
-            // println!("initial = {:?}", initial);
-            // println!("size = {:?}", size);
             commands_list.push(generate_region_commands(model, initial, size));
         }
         // others
