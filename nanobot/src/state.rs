@@ -64,6 +64,7 @@ fn single_volatile_coordinate(p: Position) -> VolatileCoordinates {
 
 impl State {
     pub fn update_time_step(&mut self, commands: &Vec<Command>) -> Result<(), Box<Error>> {
+        assert_eq!(commands.len(), self.bots.len());
         let r = self.matrix.len();
         self.energy += (r * r * r) as i64 * match self.harmonics {
             Harmonics::Low => 3,
@@ -351,4 +352,27 @@ fn test_fill_command() {
         let r = state.update_one(0, &Command::Fill(NCD::new(1, 0, 0)));
         assert!(r.is_err());
     }
+}
+
+#[test]
+fn test_update_time_step() {
+    {
+        let mut state = State::initial(3);
+        let commands = vec![Command::Wait];
+        state.update_time_step(&commands).unwrap();
+        let mut expected_energy = 3 * 3 * 3 * 3 + 20;
+        assert_eq!(state.energy, expected_energy);
+
+        let commands = vec![Command::Flip];
+        state.update_time_step(&commands).unwrap();
+        expected_energy += 3 * 3 * 3 * 3 + 20;
+        assert_eq!(state.energy, expected_energy);
+
+        let commands = vec![Command::Wait];
+        state.update_time_step(&commands).unwrap();
+        expected_energy += 3 * 3 * 3 * 30 + 20;
+        assert_eq!(state.energy, expected_energy);
+    }
+
+    // TODO interfere check
 }
