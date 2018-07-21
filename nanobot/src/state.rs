@@ -8,9 +8,3 @@ struct State {
     bots: Vec<Nanobot>,
     trace: Vec<Command>,
 }
-
-impl State {
-    fn encode(&self) -> Vec<u8> {
-        vec![]
-    }
-}

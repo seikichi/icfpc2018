@@ -1,3 +1,9 @@
+use std::error::*;
+use std::fs;
+use std::io::BufWriter;
+use std::io::Write;
+use std::path::Path;
+
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
 pub enum Harmonics {
     Low,
@@ -243,4 +249,29 @@ pub struct Nanobot {
     bid: usize,
     pos: (i32, i32, i32),
     seeds: Vec<Bid>,
+}
+
+pub fn encode_trace(trace: &[Command]) -> Vec<u8> {
+    let mut ret = Vec::with_capacity(trace.len() * 1);
+    for t in trace.iter() {
+        ret.append(&mut t.encode());
+    }
+    ret
+}
+#[test]
+fn encode_trace_test() {
+    let fusions = Command::FusionS(NCD::new(1, -1, 0));
+    let fission = Command::Fission(NCD::new(0, 0, 1), 5);
+    let trace = vec![fusions, fission];
+    let result = encode_trace(&trace[..]);
+    assert_eq!(result.len(), 3);
+    assert_eq!(result[0], 0b10011110);
+    assert_eq!(result[1], 0b01110101);
+    assert_eq!(result[2], 0b00000101);
+}
+
+pub fn write_trace_file(path: &Path, trace: &[Command]) -> Result<(), Box<Error>> {
+    let mut buffer = fs::File::create(path)?;
+    buffer.write_all(&encode_trace(trace)[..])?;
+    Ok(())
 }
