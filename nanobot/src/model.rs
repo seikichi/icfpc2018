@@ -31,6 +31,7 @@ impl Model {
                 let x = pos / (r * r);
                 let y = (pos % (r * r)) / r;
                 let z = pos % r;
+                assert!(1 <= x && x <= r - 2 && y <= r - 2 && 1 <= z && z <= r - 2);
                 matrix[x][y][z] = Voxel::Full;
             }
         }
@@ -39,30 +40,16 @@ impl Model {
 }
 
 #[test]
-fn test_single_voxel() {
-    let mut bytes: &[u8] = &[1, 0b00000001];
+fn test_3x3_model_with_single_full_voxel() {
+    let mut bytes: &[u8] = &[3, 0b0000000, 0b00000100, 0b00000000, 0b00000000];
     let model = Model::new(&mut bytes).unwrap();
-    assert_eq!(Voxel::Full, model.matrix[0][0][0]);
+    assert_eq!(Voxel::Full, model.matrix[1][0][1]);
 }
 
 #[test]
-fn test_2x2_voxel() {
-    let mut bytes: &[u8] = &[2, 0b10010110];
+fn test_3x3_model_with_2_full_voxels() {
+    let mut bytes: &[u8] = &[3, 0b0000000, 0b00100100, 0b00000000, 0b00000000];
     let model = Model::new(&mut bytes).unwrap();
-    assert_eq!(Voxel::Void, model.matrix[0][0][0]);
-    assert_eq!(Voxel::Full, model.matrix[1][0][0]);
-    assert_eq!(Voxel::Full, model.matrix[0][1][0]);
-    assert_eq!(Voxel::Void, model.matrix[1][1][0]);
-    assert_eq!(Voxel::Full, model.matrix[0][0][1]);
-    assert_eq!(Voxel::Void, model.matrix[1][0][1]);
-    assert_eq!(Voxel::Void, model.matrix[0][1][1]);
+    assert_eq!(Voxel::Full, model.matrix[1][0][1]);
     assert_eq!(Voxel::Full, model.matrix[1][1][1]);
-}
-
-#[test]
-fn test_3x3_voxel() {
-    let mut bytes: &[u8] = &[3, 0b0000001, 0b00000000, 0b00000000, 0b00000100];
-    let model = Model::new(&mut bytes).unwrap();
-    assert_eq!(Voxel::Full, model.matrix[0][0][0]);
-    assert_eq!(Voxel::Full, model.matrix[2][2][2]);
 }
