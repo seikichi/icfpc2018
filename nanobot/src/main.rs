@@ -52,7 +52,7 @@ struct State {
 
 impl State {
     fn encode(&self) -> Vec<u8> {
-        return vec![];
+        vec![]
     }
 }
 
@@ -62,7 +62,7 @@ struct Model {
 
 impl Model {
     fn new() -> Self {
-        return Model { matrix: vec![] };
+        Model { matrix: vec![] }
     }
 }
 
