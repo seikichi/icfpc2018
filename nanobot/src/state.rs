@@ -56,6 +56,26 @@ impl Error for SimulationError {
 
 type VolatileCoordinates = HashSet<Position>;
 
+struct UpdateOneOutput {
+    vc: VolatileCoordinates,
+    added_bots: Vec<Nanobot>,
+    deleted_bot_bids: Vec<Bid>,
+}
+
+impl UpdateOneOutput {
+    fn from_vc(vc: VolatileCoordinates) -> UpdateOneOutput {
+        UpdateOneOutput {
+            vc,
+            added_bots: vec![],
+            deleted_bot_bids: vec![],
+        }
+    }
+
+    fn from_single_volatile_coordinate(p: Position) -> UpdateOneOutput {
+        UpdateOneOutput::from_vc(single_volatile_coordinate(p))
+    }
+}
+
 fn single_volatile_coordinate(p: Position) -> VolatileCoordinates {
     let mut vc = VolatileCoordinates::new();
     vc.insert(p);
@@ -73,7 +93,8 @@ impl State {
         self.energy += self.bots.len() as i64 * 20;
         let mut vcs = VolatileCoordinates::new();
         for (i, command) in commands.iter().enumerate() {
-            let vc = self.update_one(i, command)?;
+            let output = self.update_one(i, command)?;
+            let vc = output.vc;
             if !vcs.is_disjoint(&vc) {
                 let message = format!(
                     "nanobot interfere : command={:?}, naonbot_index={}",
@@ -85,11 +106,12 @@ impl State {
         }
         Ok(())
     }
+
     pub fn update_one(
         &mut self,
         nanobot_index: usize,
         command: &Command,
-    ) -> Result<VolatileCoordinates, Box<Error>> {
+    ) -> Result<UpdateOneOutput, Box<Error>> {
         let c = self.bots[nanobot_index].pos;
         match command {
             Command::Halt => {
@@ -113,20 +135,23 @@ impl State {
                 }
                 self.bots.pop();
 
-                Ok(single_volatile_coordinate(c))
+                Ok(UpdateOneOutput::from_single_volatile_coordinate(c))
             }
 
-            Command::Wait => Ok(single_volatile_coordinate(c)),
+            Command::Wait => Ok(UpdateOneOutput::from_single_volatile_coordinate(c)),
 
             Command::Flip => {
                 self.harmonics = match self.harmonics {
                     Harmonics::Low => Harmonics::High,
                     Harmonics::High => Harmonics::Low,
                 };
-                Ok(single_volatile_coordinate(c))
+                Ok(UpdateOneOutput::from_single_volatile_coordinate(c))
             }
 
-            Command::SMove(llcd) => self.move_straight(llcd, nanobot_index, command),
+            Command::SMove(llcd) => {
+                let vc = self.move_straight(llcd, nanobot_index, command)?;
+                Ok(UpdateOneOutput::from_vc(vc))
+            },
 
             Command::LMove(slcd1, slcd2) => {
                 let mut vc1 = self.move_straight(slcd1, nanobot_index, command)?;
@@ -134,7 +159,7 @@ impl State {
                 self.energy += 4;
                 vc1.extend(&vc2);
 
-                Ok(vc1)
+                Ok(UpdateOneOutput::from_vc(vc1))
             }
 
             Command::Fill(ncd) => {
@@ -158,7 +183,7 @@ impl State {
                 vc.insert(c);
                 vc.insert(new_c);
 
-                Ok(vc)
+                Ok(UpdateOneOutput::from_vc(vc))
             }
 
             _ => unimplemented!(),
@@ -208,7 +233,7 @@ impl State {
 fn test_halt_command() {
     {
         let mut state = State::initial(3);
-        let vc = state.update_one(0, &Command::Halt).unwrap();
+        let vc = state.update_one(0, &Command::Halt).unwrap().vc;
         assert_eq!(state.bots.len(), 0);
         assert_eq!(vc, single_volatile_coordinate(Position::zero()));
     }
@@ -244,7 +269,7 @@ fn test_halt_command() {
 fn test_flip_command() {
     {
         let mut state = State::initial(3);
-        let vc = state.update_one(0, &Command::Flip).unwrap();
+        let vc = state.update_one(0, &Command::Flip).unwrap().vc;
         assert!(state.harmonics == Harmonics::High);
         assert_eq!(vc, single_volatile_coordinate(Position::zero()));
         state.update_one(0, &Command::Flip).unwrap();
@@ -263,7 +288,7 @@ fn test_smove_command() {
         assert_eq!(state.energy, 2);
         let vc = state
             .update_one(0, &Command::SMove(LLCD::new(0, 2, 0)))
-            .unwrap();
+            .unwrap().vc;
         assert_eq!(state.bots[0].pos, Position::new(1, 2, 0));
         assert_eq!(state.energy, 6);
         assert_eq!(
@@ -294,7 +319,7 @@ fn test_lmove_command() {
         let mut state = State::initial(3);
         let vc = state
             .update_one(0, &Command::LMove(SLCD::new(1, 0, 0), SLCD::new(0, 1, 0)))
-            .unwrap();
+            .unwrap().vc;
         let mut expected_vc = VolatileCoordinates::new();
         expected_vc.insert(Position::new(0, 0, 0));
         expected_vc.insert(Position::new(1, 0, 0));
@@ -327,7 +352,7 @@ fn test_fill_command() {
         assert_eq!(state.matrix[0][0][1], Voxel::Void);
         let vc = state
             .update_one(0, &Command::Fill(NCD::new(1, 0, 0)))
-            .unwrap();
+            .unwrap().vc;
         let mut expected_vc = VolatileCoordinates::new();
         expected_vc.insert(Position::new(0, 0, 0));
         expected_vc.insert(Position::new(1, 0, 0));
