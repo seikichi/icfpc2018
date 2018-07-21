@@ -129,7 +129,7 @@ pub struct NCD {
 }
 
 impl NCD {
-    fn new(x: i32, y: i32, z: i32) -> Self {
+    pub fn new(x: i32, y: i32, z: i32) -> Self {
         let ncd = NCD { x, y, z };
         assert!(ncd.manhattan_length() <= 2 && ncd.chessboard_length() == 1);
         ncd
