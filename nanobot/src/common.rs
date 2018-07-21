@@ -1,8 +1,9 @@
 use std::error::*;
 use std::fs;
-use std::io::BufWriter;
 use std::io::Write;
 use std::path::Path;
+use std::ops::Add;
+use std::fmt;
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
 pub enum Harmonics {
@@ -31,7 +32,7 @@ pub enum Command {
     FusionS(NCD),
 }
 impl Command {
-    fn encode(&self) -> Vec<u8> {
+    pub fn encode(&self) -> Vec<u8> {
         match self {
             Command::Halt => vec![0b11111111],
             Command::Wait => vec![0b11111110],
@@ -67,6 +68,7 @@ impl Command {
         }
     }
 }
+
 #[test]
 fn command_encode_test() {
     let flip = Command::Flip.encode();
@@ -114,6 +116,12 @@ pub trait CD {
     }
 }
 
+impl fmt::Display for CD {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "({}, {}, {})", self.x(), self.y(), self.z())
+    }
+}
+
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
 pub struct NCD {
     x: i32,
@@ -127,10 +135,11 @@ impl NCD {
         assert!(ncd.manhattan_length() <= 2 && ncd.chessboard_length() == 1);
         ncd
     }
-    fn encode(&self) -> u8 {
+    pub fn encode(&self) -> u8 {
         ((self.x + 1) * 9 + (self.y + 1) * 3 + (self.z + 1)) as u8
     }
 }
+
 impl CD for NCD {
     fn x(&self) -> i32 {
         self.x
@@ -155,8 +164,9 @@ pub struct SLCD {
     y: i32,
     z: i32,
 }
+
 impl SLCD {
-    fn new(x: i32, y: i32, z: i32) -> Self {
+    pub fn new(x: i32, y: i32, z: i32) -> Self {
         let slcd = SLCD { x, y, z };
         assert!(
             slcd.manhattan_length() <= 5
@@ -165,7 +175,7 @@ impl SLCD {
         );
         slcd
     }
-    fn encode(&self) -> (u8, u8) {
+    pub fn encode(&self) -> (u8, u8) {
         let ret = if self.x != 0 {
             (0b01, self.x + 5)
         } else if self.y != 0 {
@@ -176,6 +186,7 @@ impl SLCD {
         (ret.0, ret.1 as u8)
     }
 }
+
 impl CD for SLCD {
     fn x(&self) -> i32 {
         self.x
@@ -187,6 +198,7 @@ impl CD for SLCD {
         self.z
     }
 }
+
 #[test]
 fn slcd_encode_test() {
     let slcd = SLCD::new(-3, 0, 0);
@@ -201,8 +213,9 @@ pub struct LLCD {
     y: i32,
     z: i32,
 }
+
 impl LLCD {
-    fn new(x: i32, y: i32, z: i32) -> Self {
+    pub fn new(x: i32, y: i32, z: i32) -> Self {
         let llcd = LLCD { x, y, z };
         assert!(
             llcd.manhattan_length() <= 15
@@ -211,7 +224,7 @@ impl LLCD {
         );
         llcd
     }
-    fn encode(&self) -> (u8, u8) {
+    pub fn encode(&self) -> (u8, u8) {
         let ret = if self.x != 0 {
             (0b01, self.x + 15)
         } else if self.y != 0 {
@@ -222,6 +235,7 @@ impl LLCD {
         (ret.0, ret.1 as u8)
     }
 }
+
 impl CD for LLCD {
     fn x(&self) -> i32 {
         self.x
@@ -233,6 +247,7 @@ impl CD for LLCD {
         self.z
     }
 }
+
 #[test]
 fn llcd_encode_test() {
     let llcd = LLCD::new(0, 10, 0);
@@ -241,14 +256,45 @@ fn llcd_encode_test() {
     assert_eq!(enc.1, 25);
 }
 
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug)]
+pub struct Position {
+    pub x: i32,
+    pub y: i32,
+    pub z: i32,
+}
+
+impl Position {
+    pub fn new(x: i32, y: i32, z: i32) -> Position {
+        Position { x, y, z }
+    }
+}
+
+impl fmt::Display for Position {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "({}, {}, {})", self.x, self.y, self.z)
+    }
+}
+
+impl<'a> Add<&'a CD> for Position {
+    type Output = Position;
+
+    fn add(self, other: &'a CD) -> Position {
+        Position {
+            x: self.x + other.x(),
+            y: self.y + other.y(),
+            z: self.z + other.z(),
+        }
+    }
+}
+
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
-pub struct Bid(usize);
+pub struct Bid(pub usize);
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
 pub struct Nanobot {
-    bid: usize,
-    pos: (i32, i32, i32),
-    seeds: Vec<Bid>,
+    pub bid: Bid,
+    pub pos: Position,
+    pub seeds: Vec<Bid>,
 }
 
 pub fn encode_trace(trace: &[Command]) -> Vec<u8> {
@@ -258,6 +304,7 @@ pub fn encode_trace(trace: &[Command]) -> Vec<u8> {
     }
     ret
 }
+
 #[test]
 fn encode_trace_test() {
     let fusions = Command::FusionS(NCD::new(1, -1, 0));
