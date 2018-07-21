@@ -6,8 +6,18 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Greeting
-          command: echo Hello, world.
+          name: Build
+          command: |
+            cd nanobot
+            cargo build
       - run:
-          name: Print the Current Time
-          command: date
+          name: Test
+          command: |
+            cd nanobot
+            cargo test
+
+workflows:
+  version: 2
+  nanobot:
+    jobs:
+      - build
