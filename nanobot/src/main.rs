@@ -1,13 +1,16 @@
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
 enum Harmonics {
     Low,
     High,
 }
 
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
 enum Voxel {
     Full,
     Void,
 }
 
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
 enum Command {
     // singleton
     Halt,
@@ -22,26 +25,31 @@ enum Command {
     FusionS(NCD),
 }
 
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
 struct NCD {
     x: i32,
     y: i32,
     z: i32,
 }
 
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
 struct LCD {
     x: i32,
     y: i32,
     z: i32,
 }
 
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
 struct Bid(usize);
 
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
 struct Nanobot {
     bid: usize,
     pos: (i32, i32, i32),
     seeds: Vec<Bid>,
 }
 
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
 struct State {
     energy: i64,
     harmonics: Harmonics,
@@ -56,8 +64,9 @@ impl State {
     }
 }
 
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
 struct Model {
-    matrix: Vec<Vec<Vec<Voxel>>>
+    matrix: Vec<Vec<Vec<Voxel>>>,
 }
 
 impl Model {
@@ -65,7 +74,6 @@ impl Model {
         Model { matrix: vec![] }
     }
 }
-
 
 fn main() {
     println!("Hello, world!");
