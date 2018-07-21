@@ -256,6 +256,7 @@ impl State {
                 let bot = &mut self.bots[nanobot_index];
                 bot.seeds.push(secondary_bot.bid);
                 bot.seeds.append(&mut secondary_bot.seeds);
+                bot.seeds.sort();
                 self.energy -= 24;
 
                 Ok(UpdateOneOutput {
@@ -529,6 +530,33 @@ fn test_fission_command() {
         let mut state = State::initial(3);
         state.bots[0].seeds = vec![];
         let r = state.update_one(0, &Command::Fission(NCD::new(1, 0, 0), 0));
+        assert!(r.is_err());
+    }
+}
+
+#[test]
+fn test_fusion_command() {
+    {
+        let mut state = State::initial(3);
+        state.update_time_step(&vec![Command::Fission(NCD::new(1, 0, 0), 1)]).unwrap();
+        assert_eq!(state.energy, 3 * 3 * 3 * 3 + 20 + 24);
+
+        state.update_time_step(&vec![
+            Command::FusionP(NCD::new(1, 0, 0)),
+            Command::FusionS(NCD::new(-1, 0, 0)),
+        ]).unwrap();
+
+        assert_eq!(state.bots.len(), 1);
+        assert_eq!(state.bots[0].bid, Bid(1));
+        assert_eq!(state.bots[0].seeds, (2..21).map(|i| Bid(i)).collect::<Vec<Bid>>());
+        assert_eq!(state.energy, 3 * 3 * 3 * 3 * 2 + 20 + 40);
+    }
+
+    {
+        let mut state = State::initial(3);
+        let r = state.update_time_step(&vec![
+            Command::FusionP(NCD::new(1, 0, 0)),
+        ]);
         assert!(r.is_err());
     }
 }
