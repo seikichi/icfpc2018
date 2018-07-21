@@ -1,6 +1,6 @@
 use common::*;
-use std::fmt;
 use std::error::*;
+use std::fmt;
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
 pub struct State {
@@ -34,7 +34,9 @@ pub struct SimulationError {
 
 impl SimulationError {
     pub fn new(message: String) -> SimulationError {
-        SimulationError{message: message.to_string()}
+        SimulationError {
+            message: message.to_string(),
+        }
     }
 }
 
@@ -45,20 +47,32 @@ impl fmt::Display for SimulationError {
 }
 
 impl Error for SimulationError {
-    fn cause(&self) -> Option<&Error> { None }
+    fn cause(&self) -> Option<&Error> {
+        None
+    }
 }
 
 impl State {
-    pub fn update_one(&mut self, nanobot_index: usize, command: &Command) -> Result<(), Box<Error>> {
+    pub fn update_one(
+        &mut self,
+        nanobot_index: usize,
+        command: &Command,
+    ) -> Result<(), Box<Error>> {
         let c = self.bots[nanobot_index].pos;
         match command {
             Command::Halt => {
                 if c != Position::new(0, 0, 0) {
-                    let message = format!("nanobot position is not origin: command=Halt, naonbot_index={}, c={}", nanobot_index, c);
+                    let message = format!(
+                        "nanobot position is not origin: command=Halt, naonbot_index={}, c={}",
+                        nanobot_index, c
+                    );
                     return Err(Box::new(SimulationError::new(message)));
                 }
                 if self.bots.len() != 1 {
-                    let message = format!("the number of nanobots is not 1: command=Halt, n_nanobots={}", self.bots.len());
+                    let message = format!(
+                        "the number of nanobots is not 1: command=Halt, n_nanobots={}",
+                        self.bots.len()
+                    );
                     return Err(Box::new(SimulationError::new(message)));
                 }
                 if self.harmonics != Harmonics::Low {
@@ -67,11 +81,9 @@ impl State {
                 }
                 self.bots.pop();
                 Ok(())
-            },
+            }
 
-            Command::Wait => {
-                Ok(())
-            },
+            Command::Wait => Ok(()),
 
             Command::Flip => {
                 self.harmonics = match self.harmonics {
@@ -79,18 +91,18 @@ impl State {
                     Harmonics::High => Harmonics::Low,
                 };
                 Ok(())
-            },
+            }
 
             Command::SMove(llcd) => {
                 let new_c = c + llcd;
                 if !self.is_valid_coordinate(&new_c) {
                     let message = format!("nanobot is out of matrix: command=SMove, c={}", new_c);
-                    return Err(Box::new(SimulationError::new(message)))
+                    return Err(Box::new(SimulationError::new(message)));
                 }
                 self.bots[nanobot_index].pos = new_c;
                 self.energy += 2 * llcd.manhattan_length() as i64;
                 Ok(())
-            },
+            }
 
             Command::LMove(slcd1, slcd2) => {
                 let new_c1 = c + slcd1;
@@ -98,8 +110,9 @@ impl State {
 
                 for new_c in vec![&new_c1, &new_c2] {
                     if !self.is_valid_coordinate(new_c) {
-                        let message = format!("nanobot is out of matrix: command=LMove, c={}", new_c);
-                        return Err(Box::new(SimulationError::new(message)))
+                        let message =
+                            format!("nanobot is out of matrix: command=LMove, c={}", new_c);
+                        return Err(Box::new(SimulationError::new(message)));
                     }
                 }
 
@@ -107,30 +120,29 @@ impl State {
                 self.energy += 2 * (slcd1.manhattan_length() + slcd2.manhattan_length() + 2) as i64;
 
                 Ok(())
-            },
+            }
 
             Command::Fill(ncd) => {
                 let new_c = c + ncd;
 
                 if !self.is_valid_coordinate(&new_c) {
                     let message = format!("nanobot is out of matrix: command=Fill, c={}", new_c);
-                    return Err(Box::new(SimulationError::new(message)))
+                    return Err(Box::new(SimulationError::new(message)));
                 }
 
                 match self.matrix[new_c.z as usize][new_c.y as usize][new_c.x as usize] {
                     Voxel::Void => {
-                        self.matrix[new_c.z as usize][new_c.y as usize][new_c.x as usize] = Voxel::Full;
+                        self.matrix[new_c.z as usize][new_c.y as usize][new_c.x as usize] =
+                            Voxel::Full;
                         self.energy += 12
-                    },
-                    Voxel::Full => {
-                        self.energy += 6
                     }
+                    Voxel::Full => self.energy += 6,
                 }
 
                 Ok(())
-            },
+            }
 
-            _ => unimplemented!()
+            _ => unimplemented!(),
         }
     }
 
@@ -138,9 +150,15 @@ impl State {
         let rx = self.matrix[0][0].len() as i32;
         let ry = self.matrix[0].len() as i32;
         let rz = self.matrix.len() as i32;
-        if p.x < 0 || p.x >= rx { return false; }
-        if p.y < 0 || p.y >= ry { return false; }
-        if p.z < 0 || p.z >= rz { return false; }
+        if p.x < 0 || p.x >= rx {
+            return false;
+        }
+        if p.y < 0 || p.y >= ry {
+            return false;
+        }
+        if p.z < 0 || p.z >= rz {
+            return false;
+        }
         true
     }
 }
@@ -155,7 +173,9 @@ fn test_halt_command() {
 
     {
         let mut state = State::initial(3);
-        state.update_one(0, &Command::SMove(LLCD::new(1, 0, 0))).unwrap();
+        state
+            .update_one(0, &Command::SMove(LLCD::new(1, 0, 0)))
+            .unwrap();
         let r = state.update_one(0, &Command::Halt);
         assert!(r.is_err());
     }
@@ -171,9 +191,109 @@ fn test_halt_command() {
         let mut state = State::initial(3);
 
         let new_bot = state.bots[0].clone();
-        state.bots.push(new_bot);     // FIXME: 後でFissionにする
+        state.bots.push(new_bot); // FIXME: 後でFissionにする
 
         let r = state.update_one(0, &Command::Halt);
+        assert!(r.is_err());
+    }
+}
+
+#[test]
+fn test_flip_command() {
+    {
+        let mut state = State::initial(3);
+        state.update_one(0, &Command::Flip).unwrap();
+        assert!(state.harmonics == Harmonics::High);
+        state.update_one(0, &Command::Flip).unwrap();
+        assert!(state.harmonics == Harmonics::Low);
+    }
+}
+
+#[test]
+fn test_smove_command() {
+    {
+        let mut state = State::initial(3);
+        state
+            .update_one(0, &Command::SMove(LLCD::new(1, 0, 0)))
+            .unwrap();
+        assert_eq!(state.bots[0].pos, Position::new(1, 0, 0));
+        assert_eq!(state.energy, 2);
+        state
+            .update_one(0, &Command::SMove(LLCD::new(0, 2, 0)))
+            .unwrap();
+        assert_eq!(state.bots[0].pos, Position::new(1, 2, 0));
+        assert_eq!(state.energy, 6);
+        state
+            .update_one(0, &Command::SMove(LLCD::new(0, 0, 1)))
+            .unwrap();
+        assert_eq!(state.bots[0].pos, Position::new(1, 2, 1));
+        assert_eq!(state.energy, 8);
+    }
+    {
+        let mut state = State::initial(3);
+        let r = state.update_one(0, &Command::SMove(LLCD::new(0, 0, -1)));
+        assert!(r.is_err());
+    }
+    {
+        let mut state = State::initial(3);
+        let r = state.update_one(0, &Command::SMove(LLCD::new(3, 0, 0)));
+        assert!(r.is_err());
+    }
+}
+
+#[test]
+fn test_lmove_command() {
+    {
+        let mut state = State::initial(3);
+        state
+            .update_one(0, &Command::LMove(SLCD::new(1, 0, 0), SLCD::new(0, 1, 0)))
+            .unwrap();
+        assert_eq!(state.bots[0].pos, Position::new(1, 1, 0));
+        assert_eq!(state.energy, 8);
+        state
+            .update_one(0, &Command::LMove(SLCD::new(0, 0, 1), SLCD::new(0, 0, -1)))
+            .unwrap();
+        assert_eq!(state.bots[0].pos, Position::new(1, 1, 0));
+        assert_eq!(state.energy, 16);
+    }
+    {
+        let mut state = State::initial(3);
+        let r = state.update_one(0, &Command::LMove(SLCD::new(0, 0, 4), SLCD::new(0, 0, 1)));
+        assert!(r.is_err());
+    }
+    {
+        let mut state = State::initial(3);
+        let r = state.update_one(0, &Command::LMove(SLCD::new(0, 0, 1), SLCD::new(0, -3, 0)));
+        assert!(r.is_err());
+    }
+}
+
+#[test]
+fn test_fill_command() {
+    {
+        let mut state = State::initial(3);
+        assert_eq!(state.matrix[0][0][1], Voxel::Void);
+        state
+            .update_one(0, &Command::Fill(NCD::new(1, 0, 0)))
+            .unwrap();
+        assert_eq!(state.matrix[0][0][1], Voxel::Full);
+        assert_eq!(state.energy, 12);
+        state
+            .update_one(0, &Command::Fill(NCD::new(1, 0, 0)))
+            .unwrap();
+        assert_eq!(state.energy, 18);
+    }
+    {
+        let mut state = State::initial(3);
+        let r = state.update_one(0, &Command::Fill(NCD::new(-1, 0, 0)));
+        assert!(r.is_err());
+    }
+    {
+        let mut state = State::initial(3);
+        state
+            .update_one(0, &Command::SMove(LLCD::new(2, 0, 0)))
+            .unwrap();
+        let r = state.update_one(0, &Command::Fill(NCD::new(1, 0, 0)));
         assert!(r.is_err());
     }
 }
