@@ -10,6 +10,23 @@ pub struct State {
     bots: Vec<Nanobot>,
 }
 
+impl State {
+    // returns inital state
+    pub fn initial(r: usize) -> State {
+        let bot = Nanobot {
+            bid: Bid(1),
+            pos: Position::new(0, 0, 0),
+            seeds: (2..20).map(|bid| Bid(bid)).collect(),
+        };
+        State {
+            energy: 0,
+            harmonics: Harmonics::Low,
+            matrix: vec![vec![vec![Voxel::Void; r]; r]; r],
+            bots: vec![bot],
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct SimulationError {
     message: String,
@@ -126,4 +143,10 @@ impl State {
         if p.z < 0 || p.z >= rz { return false; }
         true
     }
+}
+
+#[test]
+fn test_halt_command() {
+    let state = State::initial(3);
+    assert!(true);
 }

@@ -287,11 +287,11 @@ impl<'a> Add<&'a CD> for Position {
 }
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
-pub struct Bid(usize);
+pub struct Bid(pub usize);
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
 pub struct Nanobot {
-    pub bid: usize,
+    pub bid: Bid,
     pub pos: Position,
     pub seeds: Vec<Bid>,
 }
