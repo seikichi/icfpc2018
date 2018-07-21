@@ -268,6 +268,10 @@ impl Position {
     pub fn new(x: i32, y: i32, z: i32) -> Position {
         Position { x, y, z }
     }
+
+    pub fn zero() -> Position {
+        Position { x: 0, y: 0, z: 0 }
+    }
 }
 
 impl fmt::Display for Position {

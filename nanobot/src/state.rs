@@ -180,8 +180,9 @@ impl State {
 fn test_halt_command() {
     {
         let mut state = State::initial(3);
-        state.update_one(0, &Command::Halt).unwrap();
+        let vc = state.update_one(0, &Command::Halt).unwrap();
         assert_eq!(state.bots.len(), 0);
+        assert_eq!(vc, single_volatile_coordinate(Position::zero()));
     }
 
     {
@@ -215,8 +216,9 @@ fn test_halt_command() {
 fn test_flip_command() {
     {
         let mut state = State::initial(3);
-        state.update_one(0, &Command::Flip).unwrap();
+        let vc = state.update_one(0, &Command::Flip).unwrap();
         assert!(state.harmonics == Harmonics::High);
+        assert_eq!(vc, single_volatile_coordinate(Position::zero()));
         state.update_one(0, &Command::Flip).unwrap();
         assert!(state.harmonics == Harmonics::Low);
     }
@@ -231,11 +233,12 @@ fn test_smove_command() {
             .unwrap();
         assert_eq!(state.bots[0].pos, Position::new(1, 0, 0));
         assert_eq!(state.energy, 2);
-        state
+        let vc = state
             .update_one(0, &Command::SMove(LLCD::new(0, 2, 0)))
             .unwrap();
         assert_eq!(state.bots[0].pos, Position::new(1, 2, 0));
         assert_eq!(state.energy, 6);
+        assert_eq!(vc, region(Position::new(1, 0, 0), Position::new(1, 2, 0)).collect());
         state
             .update_one(0, &Command::SMove(LLCD::new(0, 0, 1)))
             .unwrap();
@@ -258,11 +261,16 @@ fn test_smove_command() {
 fn test_lmove_command() {
     {
         let mut state = State::initial(3);
-        state
+        let vc = state
             .update_one(0, &Command::LMove(SLCD::new(1, 0, 0), SLCD::new(0, 1, 0)))
             .unwrap();
+        let mut expected_vc = VolatileCoordinates::new();
+        expected_vc.insert(Position::new(0, 0, 0));
+        expected_vc.insert(Position::new(1, 0, 0));
+        expected_vc.insert(Position::new(1, 1, 0));
         assert_eq!(state.bots[0].pos, Position::new(1, 1, 0));
         assert_eq!(state.energy, 8);
+        assert_eq!(vc, expected_vc);
         state
             .update_one(0, &Command::LMove(SLCD::new(0, 0, 1), SLCD::new(0, 0, -1)))
             .unwrap();
@@ -286,11 +294,15 @@ fn test_fill_command() {
     {
         let mut state = State::initial(3);
         assert_eq!(state.matrix[0][0][1], Voxel::Void);
-        state
+        let vc = state
             .update_one(0, &Command::Fill(NCD::new(1, 0, 0)))
             .unwrap();
+        let mut expected_vc = VolatileCoordinates::new();
+        expected_vc.insert(Position::new(0, 0, 0));
+        expected_vc.insert(Position::new(1, 0, 0));
         assert_eq!(state.matrix[0][0][1], Voxel::Full);
         assert_eq!(state.energy, 12);
+        assert_eq!(vc, expected_vc);
         state
             .update_one(0, &Command::Fill(NCD::new(1, 0, 0)))
             .unwrap();
