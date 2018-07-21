@@ -18,7 +18,7 @@ impl State {
         let bot = Nanobot {
             bid: Bid(1),
             pos: Position::new(0, 0, 0),
-            seeds: (2..20).map(|bid| Bid(bid)).collect(),
+            seeds: (2..21).map(|bid| Bid(bid)).collect(),
         };
         State {
             energy: 0,
@@ -166,7 +166,7 @@ impl State {
             Command::SMove(llcd) => {
                 let vc = self.move_straight(llcd, nanobot_index, command)?;
                 Ok(UpdateOneOutput::from_vc(vc))
-            },
+            }
 
             Command::LMove(slcd1, slcd2) => {
                 let mut vc1 = self.move_straight(slcd1, nanobot_index, command)?;
@@ -209,22 +209,27 @@ impl State {
                 }
 
                 let mut bot = &mut self.bots[nanobot_index];
-                if *m > bot.seeds.len() {
-                    let message = format!("too large m: command=Fission, nanobot_index={}, m={}, len={}", nanobot_index, m, bot.seeds.len());
+                if *m >= bot.seeds.len() {
+                    let message = format!(
+                        "too large m: command=Fission, nanobot_index={}, m={}, len={}",
+                        nanobot_index,
+                        m,
+                        bot.seeds.len()
+                    );
                     return Err(Box::new(SimulationError::new(message)));
                 }
 
                 let new_bot = Nanobot {
                     bid: bot.seeds[0],
                     pos: new_c,
-                    seeds: bot.seeds[1..m+1].to_vec(),
+                    seeds: bot.seeds[1..m + 1].to_vec(),
                 };
 
-                bot.seeds = bot.seeds[m+1..].to_vec();
+                bot.seeds = bot.seeds[m + 1..].to_vec();
 
                 self.energy += 24;
 
-                Ok(UpdateOneOutput{
+                Ok(UpdateOneOutput {
                     vc: couple_volatile_coordinates(c, new_c),
                     added_bots: vec![new_bot],
                     deleted_bot_bids: vec![],
@@ -301,9 +306,7 @@ fn test_halt_command() {
 
     {
         let mut state = State::initial(3);
-
-        let new_bot = state.bots[0].clone();
-        state.bots.push(new_bot); // FIXME: 後でFissionにする
+        state.update_time_step(&vec![Command::Fission(NCD::new(1, 0, 0), 0)]);
 
         let r = state.update_one(0, &Command::Halt);
         assert!(r.is_err());
@@ -333,7 +336,8 @@ fn test_smove_command() {
         assert_eq!(state.energy, 2);
         let vc = state
             .update_one(0, &Command::SMove(LLCD::new(0, 2, 0)))
-            .unwrap().vc;
+            .unwrap()
+            .vc;
         assert_eq!(state.bots[0].pos, Position::new(1, 2, 0));
         assert_eq!(state.energy, 6);
         assert_eq!(
@@ -364,7 +368,8 @@ fn test_lmove_command() {
         let mut state = State::initial(3);
         let vc = state
             .update_one(0, &Command::LMove(SLCD::new(1, 0, 0), SLCD::new(0, 1, 0)))
-            .unwrap().vc;
+            .unwrap()
+            .vc;
         let mut expected_vc = VolatileCoordinates::new();
         expected_vc.insert(Position::new(0, 0, 0));
         expected_vc.insert(Position::new(1, 0, 0));
@@ -397,7 +402,8 @@ fn test_fill_command() {
         assert_eq!(state.matrix[0][0][1], Voxel::Void);
         let vc = state
             .update_one(0, &Command::Fill(NCD::new(1, 0, 0)))
-            .unwrap().vc;
+            .unwrap()
+            .vc;
         let mut expected_vc = VolatileCoordinates::new();
         expected_vc.insert(Position::new(0, 0, 0));
         expected_vc.insert(Position::new(1, 0, 0));
@@ -425,6 +431,53 @@ fn test_fill_command() {
 }
 
 #[test]
+fn test_fission_command() {
+    {
+        let mut state = State::initial(3);
+        let output = state
+            .update_one(0, &Command::Fission(NCD::new(1, 0, 0), 1))
+            .unwrap();
+        let mut expected_vc = VolatileCoordinates::new();
+        expected_vc.insert(Position::new(0, 0, 0));
+        expected_vc.insert(Position::new(1, 0, 0));
+        assert_eq!(state.energy, 24);
+        assert_eq!(state.bots.len(), 1);
+        assert_eq!(state.bots[0].pos, Position::zero());
+        assert_eq!(state.bots[0].bid, Bid(1));
+        assert_eq!(
+            state.bots[0].seeds,
+            (4..21).map(|i| Bid(i)).collect::<Vec<Bid>>()
+        );
+        assert_eq!(output.vc, expected_vc);
+        assert_eq!(output.added_bots.len(), 1);
+        assert_eq!(output.added_bots[0].pos, Position::new(1, 0, 0));
+        assert_eq!(output.added_bots[0].bid, Bid(2));
+        assert_eq!(output.added_bots[0].seeds, vec![Bid(3)]);
+    }
+    {
+        let mut state = State::initial(3);
+        let r = state.update_one(0, &Command::Fission(NCD::new(-1, 0, 0), 1));
+        assert!(r.is_err());
+    }
+    {
+        let mut state = State::initial(3);
+        let r = state.update_one(0, &Command::Fission(NCD::new(1, 0, 0), 19));
+        assert!(r.is_err());
+    }
+    {
+        let mut state = State::initial(3);
+        let r = state.update_one(0, &Command::Fission(NCD::new(1, 0, 0), 0));
+        assert!(r.is_ok());
+    }
+    {
+        let mut state = State::initial(3);
+        state.bots[0].seeds = vec![];
+        let r = state.update_one(0, &Command::Fission(NCD::new(1, 0, 0), 0));
+        assert!(r.is_err());
+    }
+}
+
+#[test]
 fn test_update_time_step() {
     {
         let mut state = State::initial(3);
@@ -444,5 +497,25 @@ fn test_update_time_step() {
         assert_eq!(state.energy, expected_energy);
     }
 
-    // TODO interfere check
+    {
+        let mut state = State::initial(3);
+        state.update_time_step(&vec![Command::Fission(NCD::new(1, 0, 0), 0)]);
+        let commands = vec![Command::Wait, Command::SMove(LLCD::new(-1, 0, 0))];
+        let r = state.update_time_step(&commands);
+        assert!(r.is_err());
+    }
+    {
+       // xxx
+       // xxx
+       // 12x
+
+       // x2x
+       // 131
+       // 12x
+        let mut state = State::initial(3);
+        state.update_time_step(&vec![Command::Fission(NCD::new(1, 0, 0), 0)]);
+        let commands = vec![Command::LMove(SLCD::new(0, 1, 0), SLCD::new(2, 0, 0)), Command::SMove(LLCD::new(0, 2, 0))];
+        let r = state.update_time_step(&commands);
+        assert!(r.is_err());
+    }
 }
