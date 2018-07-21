@@ -118,7 +118,9 @@ fn move_straight_x(len: i32) -> Vec<Command> {
     let dir = if len > 0 { 1 } else { -1 };
     let c = Command::SMove(LLCD::new(dir * SMOVE_MAX, 0, 0));
     commands.extend(repeat(c).take((len.abs() / SMOVE_MAX) as usize));
-    commands.push(Command::SMove(LLCD::new(len % SMOVE_MAX, 0, 0)));
+    if len % SMOVE_MAX != 0 {
+        commands.push(Command::SMove(LLCD::new(len % SMOVE_MAX, 0, 0)));
+    }
     commands
 }
 
@@ -130,7 +132,9 @@ fn move_straight_y(len: i32) -> Vec<Command> {
     let dir = if len > 0 { 1 } else { -1 };
     let c = Command::SMove(LLCD::new(0, dir * SMOVE_MAX, 0));
     commands.extend(repeat(c).take((len.abs() / SMOVE_MAX) as usize));
-    commands.push(Command::SMove(LLCD::new(0, len % SMOVE_MAX, 0)));
+    if len % SMOVE_MAX != 0 {
+        commands.push(Command::SMove(LLCD::new(0, len % SMOVE_MAX, 0)));
+    }
     commands
 }
 
@@ -142,7 +146,9 @@ fn move_straight_z(len: i32) -> Vec<Command> {
     let dir = if len > 0 { 1 } else { -1 };
     let c = Command::SMove(LLCD::new(0, 0, dir * SMOVE_MAX));
     commands.extend(repeat(c).take((len.abs() / SMOVE_MAX) as usize));
-    commands.push(Command::SMove(LLCD::new(0, 0, len % SMOVE_MAX)));
+    if len % SMOVE_MAX != 0 {
+        commands.push(Command::SMove(LLCD::new(0, 0, len % SMOVE_MAX)));
+    }
     commands
 }
 
