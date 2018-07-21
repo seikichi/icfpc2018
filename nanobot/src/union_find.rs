@@ -1,11 +1,10 @@
 use std::mem;
 
-#[allow(dead_code)]
+#[derive(Clone, Debug)]
 pub struct UnionFind {
     parent: Vec<i32>,
 }
 
-#[allow(dead_code)]
 impl UnionFind {
     pub fn new(n: usize) -> UnionFind {
         UnionFind { parent: vec![-1; n] }
