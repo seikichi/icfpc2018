@@ -255,10 +255,15 @@ impl State {
             );
             return Err(Box::new(SimulationError::new(message)));
         }
+        for p in region(c, new_c) {
+            if self.matrix[p.z as usize][p.y as usize][p.x as usize] == Voxel::Full {
+                let message = format!("nanobot hits full voxel : command={:?}, c={}", command, p);
+                return Err(Box::new(SimulationError::new(message)));
+            }
+        }
 
         self.bots[nanobot_index].pos = new_c;
         self.energy += 2 * diff.manhattan_length() as i64;
-
         Ok(region(c, new_c).collect())
     }
 
@@ -358,6 +363,12 @@ fn test_smove_command() {
     {
         let mut state = State::initial(3);
         let r = state.update_one(0, &Command::SMove(LLCD::new(3, 0, 0)));
+        assert!(r.is_err());
+    }
+    {
+        let mut state = State::initial(3);
+        state.update_one(0, &Command::Fill(NCD::new(1, 0, 0)));
+        let r = state.update_one(0, &Command::SMove(LLCD::new(1, 0, 0)));
         assert!(r.is_err());
     }
 }
@@ -505,16 +516,19 @@ fn test_update_time_step() {
         assert!(r.is_err());
     }
     {
-       // xxx
-       // xxx
-       // 12x
+        // xxx
+        // xxx
+        // 12x
 
-       // x2x
-       // 131
-       // 12x
+        // x2x
+        // 131
+        // 12x
         let mut state = State::initial(3);
         state.update_time_step(&vec![Command::Fission(NCD::new(1, 0, 0), 0)]);
-        let commands = vec![Command::LMove(SLCD::new(0, 1, 0), SLCD::new(2, 0, 0)), Command::SMove(LLCD::new(0, 2, 0))];
+        let commands = vec![
+            Command::LMove(SLCD::new(0, 1, 0), SLCD::new(2, 0, 0)),
+            Command::SMove(LLCD::new(0, 2, 0)),
+        ];
         let r = state.update_time_step(&commands);
         assert!(r.is_err());
     }
