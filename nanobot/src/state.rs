@@ -101,6 +101,7 @@ impl State {
 
         let mut vcs = VolatileCoordinates::new();
         let mut added_bots = vec![];
+        let mut deleted_bot_bids = HashSet::new();
 
         for (i, command) in commands.iter().enumerate() {
             let output = self.update_one(i, command)?;
@@ -116,10 +117,13 @@ impl State {
             vcs.extend(vc);
 
             added_bots.extend(output.added_bots);
+            deleted_bot_bids.extend(output.deleted_bot_bids)
         }
 
+        self.bots.retain(|bot| !deleted_bot_bids.contains(&bot.bid));
         self.bots.extend(added_bots);
         self.bots.sort();
+
         Ok(())
     }
 
