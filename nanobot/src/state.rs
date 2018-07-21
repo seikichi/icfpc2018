@@ -101,6 +101,7 @@ impl State {
 
         let mut vcs = VolatileCoordinates::new();
         let mut added_bots = vec![];
+        let mut deleted_bot_bids = HashSet::new();
 
         for (i, command) in commands.iter().enumerate() {
             let output = self.update_one(i, command)?;
@@ -116,10 +117,13 @@ impl State {
             vcs.extend(vc);
 
             added_bots.extend(output.added_bots);
+            deleted_bot_bids.extend(output.deleted_bot_bids)
         }
 
+        self.bots.retain(|bot| !deleted_bot_bids.contains(&bot.bid));
         self.bots.extend(added_bots);
         self.bots.sort();
+
         Ok(())
     }
 
@@ -237,8 +241,49 @@ impl State {
                 })
             }
 
-            _ => unimplemented!(),
+            Command::FusionP(ncd) => {
+                let secondary_c = c + ncd;
+                let secondary_bot_index = self.find_bot_by_coordinate(secondary_c)
+                    .ok_or_else(|| {
+                        let message = format!(
+                            "failed to find nanobot at the location: command={:?}, c={}",
+                            command, secondary_c
+                        );
+                        return Box::new(SimulationError::new(message));
+                    })?;
+                let mut secondary_bot = self.bots[secondary_bot_index].clone();
+
+                let bot = &mut self.bots[nanobot_index];
+                bot.seeds.push(secondary_bot.bid);
+                bot.seeds.append(&mut secondary_bot.seeds);
+                bot.seeds.sort();
+                self.energy -= 24;
+
+                Ok(UpdateOneOutput {
+                    vc: couple_volatile_coordinates(c, secondary_c),
+                    added_bots: vec![],
+                    deleted_bot_bids: vec![secondary_bot.bid],
+                })
+            }
+
+            Command::FusionS(_) => {
+                // do nothing
+                Ok(UpdateOneOutput {
+                    vc: VolatileCoordinates::new(),
+                    added_bots: vec![],
+                    deleted_bot_bids: vec![],
+                })
+            }
         }
+    }
+
+    fn find_bot_by_coordinate(&self, p: Position) -> Option<usize> {
+        for (i, bot) in self.bots.iter().enumerate() {
+            if bot.pos == p {
+                return Some(i);
+            }
+        }
+        None
     }
 
     fn move_straight(
@@ -485,6 +530,33 @@ fn test_fission_command() {
         let mut state = State::initial(3);
         state.bots[0].seeds = vec![];
         let r = state.update_one(0, &Command::Fission(NCD::new(1, 0, 0), 0));
+        assert!(r.is_err());
+    }
+}
+
+#[test]
+fn test_fusion_command() {
+    {
+        let mut state = State::initial(3);
+        state.update_time_step(&vec![Command::Fission(NCD::new(1, 0, 0), 1)]).unwrap();
+        assert_eq!(state.energy, 3 * 3 * 3 * 3 + 20 + 24);
+
+        state.update_time_step(&vec![
+            Command::FusionP(NCD::new(1, 0, 0)),
+            Command::FusionS(NCD::new(-1, 0, 0)),
+        ]).unwrap();
+
+        assert_eq!(state.bots.len(), 1);
+        assert_eq!(state.bots[0].bid, Bid(1));
+        assert_eq!(state.bots[0].seeds, (2..21).map(|i| Bid(i)).collect::<Vec<Bid>>());
+        assert_eq!(state.energy, 3 * 3 * 3 * 3 * 2 + 20 + 40);
+    }
+
+    {
+        let mut state = State::initial(3);
+        let r = state.update_time_step(&vec![
+            Command::FusionP(NCD::new(1, 0, 0)),
+        ]);
         assert!(r.is_err());
     }
 }

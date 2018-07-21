@@ -300,7 +300,7 @@ pub fn region(p1: Position, p2: Position) -> impl Iterator<Item = Position> {
     })
 }
 
-#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug, Hash)]
 pub struct Bid(pub usize);
 
 #[derive(Eq, Clone, Debug)]
