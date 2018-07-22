@@ -395,6 +395,17 @@ pub fn region(p1: Position, p2: Position) -> impl Iterator<Item = Position> {
     })
 }
 
+pub fn adjacent(p: Position) -> Vec<Position> {
+    vec![
+        p + &Position::new(-1, 0, 0),
+        p + &Position::new(1, 0, 0),
+        p + &Position::new(0, -1, 0),
+        p + &Position::new(0, 1, 0),
+        p + &Position::new(0, 0, -1),
+        p + &Position::new(0, 0, 1),
+    ]
+}
+
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug, Hash)]
 pub struct Bid(pub usize);
 
