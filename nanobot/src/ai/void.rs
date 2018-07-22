@@ -2,7 +2,9 @@ use ai::utils::*;
 use ai::DisassembleAI;
 use common::*;
 use model::*;
+use state::State;
 use std::cmp::min;
+use std::iter::repeat;
 
 pub struct VoidAI {}
 
@@ -20,6 +22,9 @@ impl DisassembleAI for VoidAI {
                 return vec![Command::Halt];
             }
         };
+
+        let mut state = State::initial_with_model(model);
+
         let x_size = (bounding.max_x - bounding.min_x + 1) as usize;
         let z_size = (bounding.max_z - bounding.min_z + 1) as usize;
 
@@ -27,16 +32,22 @@ impl DisassembleAI for VoidAI {
         let xsplit = min(x_size, 8);
         let zsplit = min(z_size, 5);
 
+        let mut harmonity_high = false;
+
         let mut commands = vec![];
         commands.extend(move_straight_y(bounding.max_y + 1));
         commands.extend(move_straight_x(bounding.min_x));
         commands.extend(move_straight_z(bounding.min_z));
-        commands.push(Command::Flip);
-        commands.extend(
-            generate_devide_commands((x_size, z_size), (xsplit, zsplit))
-                .iter()
-                .flat_map(|v| v.iter()),
-        );
+
+        for m in commands.iter() {
+            let v = vec![m.clone()];
+            state.update_time_step(&v[..]).expect("failed to move");
+        }
+
+        for v in generate_devide_commands((x_size, z_size), (xsplit, zsplit)).into_iter() {
+            state.update_time_step(&v[..]).expect("failed to divide");
+            commands.extend(v);
+        }
 
         let mut commands_list: Vec<Vec<Command>> = vec![];
 
@@ -86,18 +97,36 @@ impl DisassembleAI for VoidAI {
         let mut index = 0;
         loop {
             let mut all_wait = true;
+            let mut step = vec![];
             for v in commands_list.iter() {
-                commands.push(if index >= v.len() {
+                step.push(if index >= v.len() {
                     Command::Wait
                 } else {
                     all_wait = false;
                     v[index].clone()
                 });
             }
-            index += 1;
             if all_wait {
                 break;
             }
+
+            if !harmonity_high {
+                match state.update_time_step(&step[..]) {
+                    Ok(_) => {}
+                    Err(_) => {
+                        harmonity_high = true;
+                        commands.push(Command::Flip);
+                        commands.extend(repeat(Command::Wait).take(commands_list.len() - 1));
+                    }
+                }
+            }
+            commands.extend(step);
+            index += 1;
+        }
+
+        if harmonity_high {
+            commands.push(Command::Flip);
+            commands.extend(repeat(Command::Wait).take(commands_list.len() - 1));
         }
 
         commands.extend(
@@ -107,7 +136,6 @@ impl DisassembleAI for VoidAI {
         );
         commands.extend(move_straight_x(-bounding.min_x));
         commands.extend(move_straight_z(-bounding.min_z));
-        commands.push(Command::Flip);
         commands.push(Command::Halt);
         commands
     }
