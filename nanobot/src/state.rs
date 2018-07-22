@@ -16,6 +16,8 @@ pub struct State {
     // grounded かどうかの判定に使う。
     // r*r*r 番目の要素は床を表す仮想の要素。
     connectivity: UnionFind,
+    connectivity_is_dirty: bool,
+
     full_voxel_count: i32,
 }
 
@@ -33,6 +35,7 @@ impl State {
             matrix: vec![vec![vec![Voxel::Void; r]; r]; r],
             bots: vec![bot],
             connectivity: UnionFind::new(r * r * r + 1),
+            connectivity_is_dirty: false,
             full_voxel_count: 0,
         }
     }
@@ -166,14 +169,49 @@ impl State {
         self.bots.extend(added_bots);
         self.bots.sort();
 
-        if self.harmonics == Harmonics::Low
-            && self.connectivity.size(r * r * r) - 1 != self.full_voxel_count as usize
-        {
+        if self.harmonics == Harmonics::Low && self.does_floating_voxel_exist() {
             let message = format!("floating full voxel exists when harmonics is low");
             return Err(Box::new(SimulationError::new(message)));
         }
 
         Ok(())
+    }
+
+    fn does_floating_voxel_exist(&mut self) -> bool {
+        if self.connectivity_is_dirty {
+            self.reculculate_connectivity()
+        }
+
+        let r = self.matrix.len();
+        self.connectivity.size(r * r * r) - 1 != self.full_voxel_count as usize
+    }
+
+    fn reculculate_connectivity(&mut self) {
+        let r = self.matrix.len();
+
+        self.connectivity = UnionFind::new(r * r * r + 1);
+        self.full_voxel_count = 0;
+
+        for (z, vz) in self.matrix.iter().enumerate() {
+            for (y, vy) in vz.iter().enumerate() {
+                for (x, &voxel) in vy.iter().enumerate() {
+                    if voxel == Voxel::Full {
+                        let p = Position::new(x as i32, y as i32, z as i32);
+                        if y == 0 {
+                            self.connectivity.union_set(p.index(r), r * r * r);
+                        }
+                        for pp in region(p + &Position::new(-1, -1, -1), p) {
+                            if pp != p && self.is_valid_coordinate(&pp) && self.voxel_at(pp) == Voxel::Full {
+                                self.connectivity.union_set(p.index(r), pp.index(r));
+                            }
+                        }
+                        self.full_voxel_count += 1;
+                    }
+                }
+            }
+        }
+
+        self.connectivity_is_dirty = false;
     }
 
     pub fn update_one(
