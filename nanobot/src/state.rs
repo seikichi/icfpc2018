@@ -200,11 +200,8 @@ impl State {
                         if y == 0 {
                             self.connectivity.union_set(p.index(r), r * r * r);
                         }
-                        for pp in region(p + &Position::new(-1, -1, -1), p) {
-                            if pp != p
-                                && self.is_valid_coordinate(&pp)
-                                && self.voxel_at(pp) == Voxel::Full
-                            {
+                        for pp in adjacent(p) {
+                            if self.is_valid_coordinate(&pp) && self.voxel_at(pp) == Voxel::Full {
                                 self.connectivity.union_set(p.index(r), pp.index(r));
                             }
                         }
@@ -287,14 +284,8 @@ impl State {
                         self.set_voxel_at(new_c, Voxel::Full);
                         self.energy += 12;
 
-                        for p in region(
-                            new_c + &Position::new(-1, -1, -1),
-                            new_c + &Position::new(1, 1, 1),
-                        ) {
-                            if new_c != p
-                                && self.is_valid_coordinate(&p)
-                                && self.voxel_at(p) == Voxel::Full
-                            {
+                        for p in adjacent(new_c) {
+                            if self.is_valid_coordinate(&p) && self.voxel_at(p) == Voxel::Full {
                                 self.connectivity.union_set(new_c.index(r), p.index(r));
                             }
                         }
@@ -916,5 +907,35 @@ fn test_grounded_check() {
         state
             .update_time_step(&vec![Command::Fill(NCD::new(0, 0, 1))])
             .unwrap();
+    }
+
+    {
+        let mut state = State::initial(3);
+        state.update_time_step(&vec![Command::Fill(NCD::new(1, 0, 0))]).unwrap();
+        let r = state.update_time_step(&vec![Command::Fill(NCD::new(0, 1, 1))]);
+        assert!(r.is_err());
+    }
+
+    {
+        let mut state = State::initial(3);
+        state.update_time_step(&vec![Command::Fill(NCD::new(1, 0, 0))]).unwrap();
+        state.update_time_step(&vec![Command::Fill(NCD::new(1, 1, 0))]).unwrap();
+        let r = state.update_time_step(&vec![Command::Void(NCD::new(1, 0, 0))]);
+        assert!(r.is_err());
+    }
+
+    {
+        let mut state = State::initial(3);
+        state.update_time_step(&vec![Command::Fill(NCD::new(1, 0, 0))]).unwrap();
+        state.update_time_step(&vec![Command::Fill(NCD::new(1, 1, 0))]).unwrap();
+        let r = state.update_time_step(&vec![Command::Void(NCD::new(1, 0, 0))]);
+        assert!(r.is_err());
+    }
+
+    {
+        let mut state = State::initial(3);
+        state.update_time_step(&vec![Command::Fill(NCD::new(1, 0, 0))]).unwrap();
+        state.update_time_step(&vec![Command::Fill(NCD::new(1, 1, 0))]).unwrap();
+        state.update_time_step(&vec![Command::Void(NCD::new(1, 1, 0))]).unwrap();
     }
 }
