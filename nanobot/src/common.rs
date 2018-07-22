@@ -28,9 +28,12 @@ pub enum Command {
     LMove(SLCD, SLCD),
     Fission(NCD, usize),
     Fill(NCD),
+    Void(NCD),
     // group
     FusionP(NCD),
     FusionS(NCD),
+    GFill(NCD, FCD),
+    GVoid(NCD, FCD),
 }
 
 impl Command {
@@ -59,6 +62,10 @@ impl Command {
                 let ncd_enc = ncd.encode();
                 vec![(ncd_enc << 3) | 0b011]
             }
+            Command::Void(ncd) => {
+                let ncd_enc = ncd.encode();
+                vec![(ncd_enc << 3) | 0b010]
+            }
             Command::FusionP(ncd) => {
                 let ncd_enc = ncd.encode();
                 vec![(ncd_enc << 3) | 0b111]
@@ -66,6 +73,16 @@ impl Command {
             Command::FusionS(ncd) => {
                 let ncd_enc = ncd.encode();
                 vec![(ncd_enc << 3) | 0b110]
+            }
+            Command::GFill(ncd, fcd) => {
+                let ncd_enc = ncd.encode();
+                let fcd_enc = fcd.encode();
+                vec![(ncd_enc << 3) | 0b001, fcd_enc.0, fcd_enc.1, fcd_enc.2]
+            }
+            Command::GVoid(ncd, fcd) => {
+                let ncd_enc = ncd.encode();
+                let fcd_enc = fcd.encode();
+                vec![(ncd_enc << 3) | 0b000, fcd_enc.0, fcd_enc.1, fcd_enc.2]
             }
         }
     }
@@ -101,6 +118,21 @@ fn command_encode_test() {
     let fill = Command::Fill(NCD::new(0, -1, 0)).encode();
     assert_eq!(fill.len(), 1);
     assert_eq!(fill[0], 0b01010011);
+    let void = Command::Void(NCD::new(1, 0, 1)).encode();
+    assert_eq!(void.len(), 1);
+    assert_eq!(void[0], 0b10111010);
+    let gfill = Command::GFill(NCD::new(0, -1, 0), FCD::new(10, -15, 20)).encode();
+    assert_eq!(gfill.len(), 4);
+    assert_eq!(gfill[0], 0b01010001);
+    assert_eq!(gfill[1], 0b00101000);
+    assert_eq!(gfill[2], 0b00001111);
+    assert_eq!(gfill[3], 0b00110010);
+    let gvoid = Command::GVoid(NCD::new(1, 0, 0), FCD::new(5, 5, -5)).encode();
+    assert_eq!(gvoid.len(), 4);
+    assert_eq!(gvoid[0], 0b10110000);
+    assert_eq!(gvoid[1], 0b00100011);
+    assert_eq!(gvoid[2], 0b00100011);
+    assert_eq!(gvoid[3], 0b00011001);
 }
 
 pub trait CD {
