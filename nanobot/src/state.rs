@@ -496,11 +496,11 @@ impl State {
     }
 
     fn voxel_at(&self, p: Position) -> Voxel {
-        self.matrix[p.z as usize][p.y as usize][p.x as usize]
+        self.matrix[p.x as usize][p.y as usize][p.z as usize]
     }
 
     fn set_voxel_at(&mut self, p: Position, v: Voxel) {
-        self.matrix[p.z as usize][p.y as usize][p.x as usize] = v
+        self.matrix[p.x as usize][p.y as usize][p.z as usize] = v
     }
 
     fn find_bot_by_coordinate(&self, p: Position) -> Option<usize> {
@@ -528,7 +528,7 @@ impl State {
             return Err(Box::new(SimulationError::new(message)));
         }
         for p in Region(c, new_c).iter() {
-            if self.matrix[p.z as usize][p.y as usize][p.x as usize] == Voxel::Full {
+            if self.voxel_at(p) == Voxel::Full {
                 let message = format!("nanobot hits full voxel : command={:?}, c={}", command, p);
                 return Err(Box::new(SimulationError::new(message)));
             }
@@ -695,12 +695,12 @@ fn test_lmove_command() {
 fn test_fill_command() {
     {
         let mut state = State::initial(3);
-        assert_eq!(state.matrix[0][0][1], Voxel::Void);
+        assert_eq!(state.matrix[1][0][0], Voxel::Void);
         let vc = state
             .update_one(0, &Command::Fill(NCD::new(1, 0, 0)))
             .unwrap()
             .vc;
-        assert_eq!(state.matrix[0][0][1], Voxel::Full);
+        assert_eq!(state.matrix[1][0][0], Voxel::Full);
         assert_eq!(state.energy, 12);
         assert_eq!(
             vc,
