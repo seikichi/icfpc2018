@@ -149,6 +149,7 @@ impl State {
 
         self.verify_fusion_commands(commands)?;
         self.verify_gvoid_commands(commands)?;
+        self.verify_gfill_commands(commands)?;
 
         self.bots.retain(|bot| !deleted_bot_bids.contains(&bot.bid));
         self.bots.extend(added_bots);
@@ -223,6 +224,38 @@ impl State {
             if group.len() != (1 << region.dimension()) {
                 let message = format!(
                     "lack of members to GVoid: len={}, dim={}",
+                    group.len(),
+                    region.dimension()
+                );
+                return Err(Box::new(SimulationError::new(message)));
+            }
+        }
+
+        Ok(())
+    }
+
+    fn verify_gfill_commands(&self, commands: &[Command]) -> Result<(), Box<Error>> {
+        let mut groups = HashMap::new();
+
+        for (i, command) in commands.iter().enumerate() {
+            if let Command::GFill(ncd, fcd) = command {
+                let c = self.bots[i].pos;
+                let region = Region(c + ncd, c + ncd + fcd).canonical();
+
+                //println!("c={}, region={:?}", c, region);
+
+                let positions = groups.entry(region).or_insert_with(|| HashSet::new());
+                if !positions.insert(c + ncd) {
+                    let message = format!("duplicate vertex in GFill: {}", c + ncd);
+                    return Err(Box::new(SimulationError::new(message)));
+                }
+            }
+        }
+
+        for (region, group) in groups.iter() {
+            if group.len() != (1 << region.dimension()) {
+                let message = format!(
+                    "lack of members to GFill: len={}, dim={}",
                     group.len(),
                     region.dimension()
                 );
@@ -1149,6 +1182,69 @@ fn test_update_time_step_gvoid() {
             Command::GVoid(NCD::new(0, 0, 1), FCD::new(-1, 1, 1)),
             Command::GVoid(NCD::new(0, 0, 1), FCD::new(-1, -1, 1)),
             Command::GVoid(NCD::new(0, -1, 1), FCD::new(1, 1, 1)),
+        ]);
+        assert!(r.is_err());
+    }
+}
+
+#[test]
+fn test_update_time_step_gfill() {
+    let original_state = {
+        let mut state = State::initial(3);
+        state
+            .update_time_step(&vec![Command::Fission(NCD::new(1, 0, 0), 4)])
+            .unwrap();
+        state
+            .update_time_step(&vec![
+                Command::Fission(NCD::new(0, 1, 0), 1),
+                Command::Fission(NCD::new(0, 1, 0), 1),
+            ])
+            .unwrap();
+
+        // for bot in state.bots.iter() {
+        //     println!("{:?}: {}", bot.bid, bot.pos);
+        // }
+        // -> Bid(1): (0, 0, 0)
+        //    Bid(2): (1, 0, 0)
+        //    Bid(3): (1, 1, 0)
+        //    Bid(7): (0, 1, 0)
+
+        state
+    };
+
+    {
+        // 正常系
+        let mut state = original_state.clone();
+        state
+            .update_time_step(&vec![
+                Command::GFill(NCD::new(0, 0, 1), FCD::new(1, 1, 0)),
+                Command::GFill(NCD::new(0, 0, 1), FCD::new(-1, 1, 0)),
+                Command::GFill(NCD::new(0, 0, 1), FCD::new(-1, -1, 0)),
+                Command::GFill(NCD::new(0, 0, 1), FCD::new(1, -1, 0)),
+            ])
+            .unwrap();
+    }
+
+    {
+        // 異常系: 数が足りない
+        let mut state = original_state.clone();
+        let r = state.update_time_step(&vec![
+            Command::GFill(NCD::new(0, 0, 1), FCD::new(1, 1, 1)),
+            Command::GFill(NCD::new(0, 0, 1), FCD::new(-1, 1, 1)),
+            Command::GFill(NCD::new(0, 0, 1), FCD::new(-1, -1, 1)),
+            Command::Wait,
+        ]);
+        assert!(r.is_err());
+    }
+
+    {
+        // 異常系: 頂点がかぶっている
+        let mut state = original_state.clone();
+        let r = state.update_time_step(&vec![
+            Command::GFill(NCD::new(0, 0, 1), FCD::new(1, 1, 1)),
+            Command::GFill(NCD::new(0, 0, 1), FCD::new(-1, 1, 1)),
+            Command::GFill(NCD::new(0, 0, 1), FCD::new(-1, -1, 1)),
+            Command::GFill(NCD::new(0, -1, 1), FCD::new(1, 1, 1)),
         ]);
         assert!(r.is_err());
     }
