@@ -2,6 +2,7 @@ use std::cmp::*;
 use std::error::*;
 use std::fmt;
 use std::fs;
+use std::io::Read;
 use std::io::Write;
 use std::ops::Add;
 use std::path::Path;
@@ -16,6 +17,31 @@ pub enum Harmonics {
 pub enum Voxel {
     Full,
     Void,
+}
+
+#[derive(Debug)]
+pub struct CommandParseError {
+    message: String,
+}
+
+impl CommandParseError {
+    pub fn new(message: String) -> CommandParseError {
+        CommandParseError {
+            message: message.to_string(),
+        }
+    }
+}
+
+impl fmt::Display for CommandParseError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "CommandParseError: {}", self.message)
+    }
+}
+
+impl Error for CommandParseError {
+    fn cause(&self) -> Option<&Error> {
+        None
+    }
 }
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug)]
@@ -86,53 +112,195 @@ impl Command {
             }
         }
     }
+    pub fn decode(input: &[u8], offset: &mut usize) -> Result<Command, Box<Error>> {
+        if input[*offset] == 0b11111111 {
+            *offset += 1;
+            return Ok(Command::Halt);
+        } else if input[*offset] == 0b11111110 {
+            *offset += 1;
+            return Ok(Command::Wait);
+        } else if input[*offset] == 0b11111101 {
+            *offset += 1;
+            return Ok(Command::Flip);
+        } else if (input[*offset] & 0b00001111) == 0b0100 {
+            let v1 = input[*offset] >> 4;
+            let v2 = input[*offset + 1];
+            let lcd = LLCD::decode(v1, v2);
+            *offset += 2;
+            return Ok(Command::SMove(lcd));
+        } else if (input[*offset] & 0b00001111) == 0b1100 {
+            let v11 = (input[*offset] >> 4) & 0b11;
+            let v12 = (input[*offset + 1] >> 0) & 0b1111;
+            let v21 = (input[*offset] >> 6) & 0b11;
+            let v22 = (input[*offset + 1] >> 4) & 0b1111;
+            let slcd1 = SLCD::decode(v11, v12);
+            let slcd2 = SLCD::decode(v21, v22);
+            *offset += 2;
+            return Ok(Command::LMove(slcd1, slcd2));
+        } else if (input[*offset] & 0b00000111) == 0b101 {
+            let v1 = input[*offset] >> 3;
+            let ncd = NCD::decode(v1);
+            let m = input[*offset + 1] as usize;
+            *offset += 2;
+            return Ok(Command::Fission(ncd, m));
+        } else if (input[*offset] & 0b00000111) == 0b011 {
+            let v1 = input[*offset] >> 3;
+            let ncd = NCD::decode(v1);
+            *offset += 1;
+            return Ok(Command::Fill(ncd));
+        } else if (input[*offset] & 0b00000111) == 0b010 {
+            let v1 = input[*offset] >> 3;
+            let ncd = NCD::decode(v1);
+            *offset += 1;
+            return Ok(Command::Void(ncd));
+        } else if (input[*offset] & 0b00000111) == 0b111 {
+            let v1 = input[*offset] >> 3;
+            let ncd = NCD::decode(v1);
+            *offset += 1;
+            return Ok(Command::FusionP(ncd));
+        } else if (input[*offset] & 0b00000111) == 0b110 {
+            let v1 = input[*offset] >> 3;
+            let ncd = NCD::decode(v1);
+            *offset += 1;
+            return Ok(Command::FusionS(ncd));
+        } else if (input[*offset] & 0b00000111) == 0b001 {
+            let v11 = input[*offset] >> 3;
+            let v21 = input[*offset + 1];
+            let v22 = input[*offset + 2];
+            let v23 = input[*offset + 3];
+            let ncd = NCD::decode(v11);
+            let fcd = FCD::decode(v21, v22, v23);
+            *offset += 4;
+            return Ok(Command::GFill(ncd, fcd));
+        } else if (input[*offset] & 0b00000111) == 0b000 {
+            let v11 = input[*offset] >> 3;
+            let v21 = input[*offset + 1];
+            let v22 = input[*offset + 2];
+            let v23 = input[*offset + 3];
+            let ncd = NCD::decode(v11);
+            let fcd = FCD::decode(v21, v22, v23);
+            *offset += 4;
+            return Ok(Command::GVoid(ncd, fcd));
+        } else {
+            let message = format!(
+                "Unknown Command: value={}, offset={}",
+                input[*offset], offset
+            );
+            return Err(Box::new(CommandParseError::new(message)));
+        }
+    }
 }
 
 #[test]
-fn command_encode_test() {
-    let flip = Command::Flip.encode();
-    assert_eq!(flip.len(), 1);
-    assert_eq!(flip[0], 0b11111101);
-    let smove = Command::SMove(LLCD::new(12, 0, 0)).encode();
-    assert_eq!(smove.len(), 2);
-    assert_eq!(smove[0], 0b00010100);
-    assert_eq!(smove[1], 0b00011011);
-    let smove = Command::SMove(LLCD::new(0, 0, -4)).encode();
-    assert_eq!(smove.len(), 2);
-    assert_eq!(smove[0], 0b00110100);
-    assert_eq!(smove[1], 0b00001011);
-    let lmove = Command::LMove(SLCD::new(3, 0, 0), SLCD::new(0, -5, 0)).encode();
-    assert_eq!(lmove.len(), 2);
-    assert_eq!(lmove[0], 0b10011100);
-    assert_eq!(lmove[1], 0b00001000);
-    let fusionp = Command::FusionP(NCD::new(-1, 1, 0)).encode();
-    assert_eq!(fusionp.len(), 1);
-    assert_eq!(fusionp[0], 0b00111111);
-    let fusions = Command::FusionS(NCD::new(1, -1, 0)).encode();
-    assert_eq!(fusions.len(), 1);
-    assert_eq!(fusions[0], 0b10011110);
-    let fission = Command::Fission(NCD::new(0, 0, 1), 5).encode();
-    assert_eq!(fission.len(), 2);
-    assert_eq!(fission[0], 0b01110101);
-    assert_eq!(fission[1], 0b00000101);
-    let fill = Command::Fill(NCD::new(0, -1, 0)).encode();
-    assert_eq!(fill.len(), 1);
-    assert_eq!(fill[0], 0b01010011);
-    let void = Command::Void(NCD::new(1, 0, 1)).encode();
-    assert_eq!(void.len(), 1);
-    assert_eq!(void[0], 0b10111010);
-    let gfill = Command::GFill(NCD::new(0, -1, 0), FCD::new(10, -15, 20)).encode();
-    assert_eq!(gfill.len(), 4);
-    assert_eq!(gfill[0], 0b01010001);
-    assert_eq!(gfill[1], 0b00101000);
-    assert_eq!(gfill[2], 0b00001111);
-    assert_eq!(gfill[3], 0b00110010);
-    let gvoid = Command::GVoid(NCD::new(1, 0, 0), FCD::new(5, 5, -5)).encode();
-    assert_eq!(gvoid.len(), 4);
-    assert_eq!(gvoid[0], 0b10110000);
-    assert_eq!(gvoid[1], 0b00100011);
-    assert_eq!(gvoid[2], 0b00100011);
-    assert_eq!(gvoid[3], 0b00011001);
+fn command_encdec_test() {
+    let mut offset = 0;
+    let flip = Command::Flip;
+    let flip_enc = flip.encode();
+    let flip2 = Command::decode(&flip_enc[..], &mut offset).unwrap();
+    assert_eq!(flip_enc.len(), 1);
+    assert_eq!(flip_enc[0], 0b11111101);
+    assert_eq!(flip2, flip);
+    assert_eq!(offset, 1);;
+
+    let mut offset = 0;
+    let smove = Command::SMove(LLCD::new(12, 0, 0));
+    let smove_enc = smove.encode();
+    let smove2 = Command::decode(&smove_enc[..], &mut offset).unwrap();
+    assert_eq!(smove_enc.len(), 2);
+    assert_eq!(smove_enc[0], 0b00010100);
+    assert_eq!(smove_enc[1], 0b00011011);
+    assert_eq!(smove2, smove);
+    assert_eq!(offset, 2);
+
+    let mut offset = 0;
+    let smove = Command::SMove(LLCD::new(0, 0, -4));
+    let smove_enc = smove.encode();
+    let smove2 = Command::decode(&smove_enc[..], &mut offset).unwrap();
+    assert_eq!(smove_enc.len(), 2);
+    assert_eq!(smove_enc[0], 0b00110100);
+    assert_eq!(smove_enc[1], 0b00001011);
+    assert_eq!(smove2, smove);
+    assert_eq!(offset, 2);
+
+    let mut offset = 0;
+    let lmove = Command::LMove(SLCD::new(3, 0, 0), SLCD::new(0, -5, 0));
+    let lmove_enc = lmove.encode();
+    let lmove2 = Command::decode(&lmove_enc[..], &mut offset).unwrap();
+    assert_eq!(lmove_enc.len(), 2);
+    assert_eq!(lmove_enc[0], 0b10011100);
+    assert_eq!(lmove_enc[1], 0b00001000);
+    assert_eq!(lmove2, lmove);
+    assert_eq!(offset, 2);
+
+    let mut offset = 0;
+    let fusionp = Command::FusionP(NCD::new(-1, 1, 0));
+    let fusionp_enc = fusionp.encode();
+    let fusionp2 = Command::decode(&fusionp_enc[..], &mut offset).unwrap();
+    assert_eq!(fusionp_enc.len(), 1);
+    assert_eq!(fusionp_enc[0], 0b00111111);
+    assert_eq!(fusionp2, fusionp);
+    assert_eq!(offset, 1);
+
+    let mut offset = 0;
+    let fusions = Command::FusionS(NCD::new(1, -1, 0));
+    let fusions_enc = fusions.encode();
+    let fusions2 = Command::decode(&fusions_enc[..], &mut offset).unwrap();
+    assert_eq!(fusions_enc.len(), 1);
+    assert_eq!(fusions_enc[0], 0b10011110);
+    assert_eq!(fusions2, fusions);
+    assert_eq!(offset, 1);
+
+    let mut offset = 0;
+    let fission = Command::Fission(NCD::new(0, 0, 1), 5);
+    let fission_enc = fission.encode();
+    let fission2 = Command::decode(&fission_enc[..], &mut offset).unwrap();
+    assert_eq!(fission_enc.len(), 2);
+    assert_eq!(fission_enc[0], 0b01110101);
+    assert_eq!(fission_enc[1], 0b00000101);
+    assert_eq!(fission2, fission);
+    assert_eq!(offset, 2);
+
+    let mut offset = 0;
+    let fill = Command::Fill(NCD::new(0, -1, 0));
+    let fill_enc = fill.encode();
+    let fill2 = Command::decode(&fill_enc[..], &mut offset).unwrap();
+    assert_eq!(fill_enc.len(), 1);
+    assert_eq!(fill_enc[0], 0b01010011);
+    assert_eq!(fill2, fill);
+    assert_eq!(offset, 1);
+
+    let mut offset = 0;
+    let void = Command::Void(NCD::new(1, 0, 1));
+    let void_enc = void.encode();
+    let void2 = Command::decode(&void_enc[..], &mut offset).unwrap();
+    assert_eq!(void_enc.len(), 1);
+    assert_eq!(void_enc[0], 0b10111010);
+    assert_eq!(void2, void);
+    assert_eq!(offset, 1);
+
+    let mut offset = 0;
+    let gfill = Command::GFill(NCD::new(0, -1, 0), FCD::new(10, -15, 20));
+    let gfill_enc = gfill.encode();
+    let gfill2 = Command::decode(&gfill_enc[..], &mut offset).unwrap();
+    assert_eq!(gfill_enc.len(), 4);
+    assert_eq!(gfill_enc[0], 0b01010001);
+    assert_eq!(gfill_enc[1], 0b00101000);
+    assert_eq!(gfill_enc[2], 0b00001111);
+    assert_eq!(gfill_enc[3], 0b00110010);
+    assert_eq!(gfill2, gfill);
+    assert_eq!(offset, 4);
+
+    let mut offset = 0;
+    let gvoid = Command::GVoid(NCD::new(1, 0, 0), FCD::new(5, 5, -5));
+    let gvoid_enc = gvoid.encode();
+    let gvoid2 = Command::decode(&gvoid_enc[..], &mut offset).unwrap();
+    assert_eq!(gvoid_enc.len(), 4);
+    assert_eq!(gvoid_enc[0], 0b10110000);
+    assert_eq!(gvoid_enc[1], 0b00100011);
+    assert_eq!(gvoid_enc[2], 0b00100011);
+    assert_eq!(gvoid_enc[3], 0b00011001);
+    assert_eq!(gvoid2, gvoid);
+    assert_eq!(offset, 4);
 }
 
 pub trait CD {
@@ -172,6 +340,12 @@ impl NCD {
     pub fn encode(&self) -> u8 {
         ((self.x + 1) * 9 + (self.y + 1) * 3 + (self.z + 1)) as u8
     }
+    pub fn decode(v: u8) -> Self {
+        let x = v as i32 / 9 % 3 - 1;
+        let y = v as i32 / 3 % 3 - 1;
+        let z = v as i32 / 1 % 3 - 1;
+        Self::new(x, y, z)
+    }
 }
 
 impl CD for NCD {
@@ -187,9 +361,11 @@ impl CD for NCD {
 }
 
 #[test]
-fn ncd_encode_test() {
+fn ncd_encdec_test() {
     let ncd = NCD::new(1, 0, 0);
     assert_eq!(ncd.encode(), 18 + 3 + 1);
+    let ncd2 = NCD::decode(ncd.encode());
+    assert_eq!(ncd2, ncd);
 }
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug)]
@@ -212,6 +388,12 @@ impl FCD {
             (self.z + 30) as u8,
         )
     }
+    pub fn decode(v1: u8, v2: u8, v3: u8) -> Self {
+        let x = v1 as i32 - 30;
+        let y = v2 as i32 - 30;
+        let z = v3 as i32 - 30;
+        Self::new(x, y, z)
+    }
 }
 
 impl CD for FCD {
@@ -227,12 +409,14 @@ impl CD for FCD {
 }
 
 #[test]
-fn fcd_encode_test() {
+fn fcd_encdec_test() {
     let fcd = FCD::new(20, 10, -5);
     let enc = fcd.encode();
     assert_eq!(enc.0, 50);
     assert_eq!(enc.1, 40);
     assert_eq!(enc.2, 25);
+    let fcd2 = FCD::decode(enc.0, enc.1, enc.2);
+    assert_eq!(fcd2, fcd);
 }
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug)]
@@ -262,6 +446,21 @@ impl SLCD {
         };
         (ret.0, ret.1 as u8)
     }
+    pub fn decode(v1: u8, v2: u8) -> Self {
+        let mut x = 0;
+        let mut y = 0;
+        let mut z = 0;
+        if v1 == 0b01 {
+            x = v2 as i32 - 5;
+        } else if v1 == 0b10 {
+            y = v2 as i32 - 5;
+        } else if v1 == 0b11 {
+            z = v2 as i32 - 5;
+        } else {
+            assert!(false);
+        }
+        Self::new(x, y, z)
+    }
 }
 
 impl CD for SLCD {
@@ -277,11 +476,13 @@ impl CD for SLCD {
 }
 
 #[test]
-fn slcd_encode_test() {
+fn slcd_encdec_test() {
     let slcd = SLCD::new(-3, 0, 0);
     let enc = slcd.encode();
     assert_eq!(enc.0, 1);
     assert_eq!(enc.1, 2);
+    let slcd2 = SLCD::decode(enc.0, enc.1);
+    assert_eq!(slcd2, slcd);
 }
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug)]
@@ -311,6 +512,21 @@ impl LLCD {
         };
         (ret.0, ret.1 as u8)
     }
+    pub fn decode(v1: u8, v2: u8) -> Self {
+        let mut x = 0;
+        let mut y = 0;
+        let mut z = 0;
+        if v1 == 0b01 {
+            x = v2 as i32 - 15;
+        } else if v1 == 0b10 {
+            y = v2 as i32 - 15;
+        } else if v1 == 0b11 {
+            z = v2 as i32 - 15;
+        } else {
+            assert!(false);
+        }
+        Self::new(x, y, z)
+    }
 }
 
 impl CD for LLCD {
@@ -326,11 +542,13 @@ impl CD for LLCD {
 }
 
 #[test]
-fn llcd_encode_test() {
+fn llcd_encdec_test() {
     let llcd = LLCD::new(0, 10, 0);
     let enc = llcd.encode();
     assert_eq!(enc.0, 2);
     assert_eq!(enc.1, 25);
+    let llcd2 = LLCD::decode(enc.0, enc.1);
+    assert_eq!(llcd2, llcd);
 }
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug, Hash)]
@@ -442,6 +660,15 @@ pub fn encode_trace(trace: &[Command]) -> Vec<u8> {
     ret
 }
 
+pub fn decode_trace(input: &[u8]) -> Vec<Command> {
+    let mut ret = Vec::with_capacity(input.len() / 4);
+    let mut offset = 0;
+    while offset < input.len() {
+        ret.push(Command::decode(input, &mut offset).unwrap());
+    }
+    ret
+}
+
 #[test]
 fn encode_trace_test() {
     let fusions = Command::FusionS(NCD::new(1, -1, 0));
@@ -452,10 +679,20 @@ fn encode_trace_test() {
     assert_eq!(result[0], 0b10011110);
     assert_eq!(result[1], 0b01110101);
     assert_eq!(result[2], 0b00000101);
+    let trace2 = decode_trace(&result[..]);
+    assert_eq!(trace2, trace);
 }
 
 pub fn write_trace_file(path: &Path, trace: &[Command]) -> Result<(), Box<Error>> {
     let mut buffer = fs::File::create(path)?;
     buffer.write_all(&encode_trace(trace)[..])?;
     Ok(())
+}
+
+pub fn read_trace_file(path: &Path) -> Result<Vec<Command>, Box<Error>> {
+    let mut f = fs::File::open(path)?;
+    let mut buffer = vec![];
+    f.read_to_end(&mut buffer);
+    let ret = decode_trace(&buffer[..]);
+    Ok(ret)
 }
