@@ -18,6 +18,31 @@ pub enum Voxel {
     Void,
 }
 
+#[derive(Debug)]
+pub struct CommandParseError {
+    message: String,
+}
+
+impl CommandParseError {
+    pub fn new(message: String) -> CommandParseError {
+        CommandParseError {
+            message: message.to_string(),
+        }
+    }
+}
+
+impl fmt::Display for CommandParseError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "CommandParseError: {}", self.message)
+    }
+}
+
+impl Error for CommandParseError {
+    fn cause(&self) -> Option<&Error> {
+        None
+    }
+}
+
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug)]
 pub enum Command {
     // singleton
@@ -84,6 +109,83 @@ impl Command {
                 let fcd_enc = fcd.encode();
                 vec![(ncd_enc << 3) | 0b000, fcd_enc.0, fcd_enc.1, fcd_enc.2]
             }
+        }
+    }
+    pub fn decode(input: &[u8], offset: &mut usize) -> Result<Command, Box<Error>> {
+        if input[*offset] == 0b11111111 {
+            *offset += 1;
+            return Ok(Command::Halt);
+        } else if input[*offset] == 0b11111110 {
+            *offset += 1;
+            return Ok(Command::Wait);
+        } else if input[*offset] == 0b11111101 {
+            *offset += 1;
+            return Ok(Command::Flip);
+        } else if (input[*offset] & 0b00001111) == 0b0100 {
+            let v1 = input[*offset] >> 4;
+            let v2 = input[*offset + 1];
+            let lcd = LLCD::decode(v1, v2);
+            *offset += 2;
+            return Ok(Command::SMove(lcd));
+        } else if (input[*offset] & 0b00001111) == 0b1100 {
+            let v11 = (input[*offset] >> 4) & 0b11;
+            let v12 = (input[*offset + 1] >> 0) & 0b1111;
+            let v21 = (input[*offset] >> 6) & 0b11;
+            let v22 = (input[*offset + 1] >> 4) & 0b1111;
+            let slcd1 = SLCD::decode(v11, v12);
+            let slcd2 = SLCD::decode(v21, v22);
+            *offset += 2;
+            return Ok(Command::LMove(slcd1, slcd2));
+        } else if (input[*offset] & 0b00000111) == 0b101 {
+            let v1 = input[*offset] >> 3;
+            let ncd = NCD::decode(v1);
+            let m = input[*offset + 1] as usize;
+            *offset += 2;
+            return Ok(Command::Fission(ncd, m));
+        } else if (input[*offset] & 0b00000111) == 0b011 {
+            let v1 = input[*offset] >> 3;
+            let ncd = NCD::decode(v1);
+            *offset += 1;
+            return Ok(Command::Fill(ncd));
+        } else if (input[*offset] & 0b00000111) == 0b010 {
+            let v1 = input[*offset] >> 3;
+            let ncd = NCD::decode(v1);
+            *offset += 1;
+            return Ok(Command::Void(ncd));
+        } else if (input[*offset] & 0b00000111) == 0b111 {
+            let v1 = input[*offset] >> 3;
+            let ncd = NCD::decode(v1);
+            *offset += 1;
+            return Ok(Command::FusionP(ncd));
+        } else if (input[*offset] & 0b00000111) == 0b110 {
+            let v1 = input[*offset] >> 3;
+            let ncd = NCD::decode(v1);
+            *offset += 1;
+            return Ok(Command::FusionS(ncd));
+        } else if (input[*offset] & 0b00000111) == 0b001 {
+            let v11 = input[*offset] >> 3;
+            let v21 = input[*offset + 1];
+            let v22 = input[*offset + 2];
+            let v23 = input[*offset + 3];
+            let ncd = NCD::decode(v11);
+            let fcd = FCD::decode(v21, v22, v23);
+            *offset += 4;
+            return Ok(Command::GFill(ncd, fcd));
+        } else if (input[*offset] & 0b00000111) == 0b000 {
+            let v11 = input[*offset] >> 3;
+            let v21 = input[*offset + 1];
+            let v22 = input[*offset + 2];
+            let v23 = input[*offset + 3];
+            let ncd = NCD::decode(v11);
+            let fcd = FCD::decode(v21, v22, v23);
+            *offset += 4;
+            return Ok(Command::GVoid(ncd, fcd));
+        } else {
+            let message = format!(
+                "Unknown Command: value={}, offset={}",
+                input[*offset], offset
+            );
+            return Err(Box::new(CommandParseError::new(message)));
         }
     }
 }
