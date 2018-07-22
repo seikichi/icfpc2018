@@ -863,7 +863,10 @@ fn test_update_time_step() {
             vec![Bid(1), Bid(2), Bid(3), Bid(8)]
         )
     }
+}
 
+#[test]
+fn test_interfere_check() {
     {
         let mut state = State::initial(3);
         state.update_time_step(&vec![Command::Fission(NCD::new(1, 0, 0), 0)]);
@@ -889,7 +892,10 @@ fn test_update_time_step() {
         let r = state.update_time_step(&commands);
         assert!(r.is_err());
     }
+}
 
+#[test]
+fn test_grounded_check() {
     {
         let mut state = State::initial(3);
         let r = state.update_time_step(&vec![Command::Fill(NCD::new(0, 1, 0))]);
