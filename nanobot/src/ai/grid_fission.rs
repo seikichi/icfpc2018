@@ -23,7 +23,7 @@ impl AssembleAI for GridFissionAI {
             }
         };
         let r = model.matrix.len();
-        let state = State::initial(r);
+        let mut state = State::initial(r);
 
         let x_size = (bounding.max_x - bounding.min_x + 1) as usize;
         let z_size = (bounding.max_z - bounding.min_z + 1) as usize;
@@ -32,15 +32,21 @@ impl AssembleAI for GridFissionAI {
         let xsplit = min(x_size, 8);
         let zsplit = min(z_size, 5);
 
+        let harmonty_high = false;
+
         let mut commands = vec![];
         commands.extend(move_straight_x(bounding.min_x));
         commands.extend(move_straight_z(bounding.min_z));
-        commands.push(Command::Flip);
-        commands.extend(
-            generate_devide_commands((x_size, z_size), (xsplit, zsplit))
-                .iter()
-                .flat_map(|v| v.iter()),
-        );
+
+        for m in commands.iter() {
+            let v = vec![m.clone()];
+            state.update_time_step(&v).expect("failed to move");
+        }
+
+        for v in generate_devide_commands((x_size, z_size), (xsplit, zsplit)).into_iter() {
+            commands.extend(v);
+            state.update_time_step(v).expect("failed to generate");
+        }
 
         let mut commands_list: Vec<Vec<Command>> = vec![];
 
@@ -112,7 +118,9 @@ impl AssembleAI for GridFissionAI {
         commands.extend(move_straight_x(-bounding.min_x));
         commands.extend(move_straight_z(-bounding.min_z));
         commands.extend(move_straight_y(-(bounding.max_y + 1)));
-        commands.push(Command::Flip);
+        if harmonty_high {
+            commands.push(Command::Flip);
+        }
         commands.push(Command::Halt);
         commands
     }
