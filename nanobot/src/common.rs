@@ -191,50 +191,115 @@ impl Command {
 }
 
 #[test]
-fn command_encode_test() {
-    let flip = Command::Flip.encode();
-    assert_eq!(flip.len(), 1);
-    assert_eq!(flip[0], 0b11111101);
-    let smove = Command::SMove(LLCD::new(12, 0, 0)).encode();
-    assert_eq!(smove.len(), 2);
-    assert_eq!(smove[0], 0b00010100);
-    assert_eq!(smove[1], 0b00011011);
-    let smove = Command::SMove(LLCD::new(0, 0, -4)).encode();
-    assert_eq!(smove.len(), 2);
-    assert_eq!(smove[0], 0b00110100);
-    assert_eq!(smove[1], 0b00001011);
-    let lmove = Command::LMove(SLCD::new(3, 0, 0), SLCD::new(0, -5, 0)).encode();
-    assert_eq!(lmove.len(), 2);
-    assert_eq!(lmove[0], 0b10011100);
-    assert_eq!(lmove[1], 0b00001000);
-    let fusionp = Command::FusionP(NCD::new(-1, 1, 0)).encode();
-    assert_eq!(fusionp.len(), 1);
-    assert_eq!(fusionp[0], 0b00111111);
-    let fusions = Command::FusionS(NCD::new(1, -1, 0)).encode();
-    assert_eq!(fusions.len(), 1);
-    assert_eq!(fusions[0], 0b10011110);
-    let fission = Command::Fission(NCD::new(0, 0, 1), 5).encode();
-    assert_eq!(fission.len(), 2);
-    assert_eq!(fission[0], 0b01110101);
-    assert_eq!(fission[1], 0b00000101);
-    let fill = Command::Fill(NCD::new(0, -1, 0)).encode();
-    assert_eq!(fill.len(), 1);
-    assert_eq!(fill[0], 0b01010011);
-    let void = Command::Void(NCD::new(1, 0, 1)).encode();
-    assert_eq!(void.len(), 1);
-    assert_eq!(void[0], 0b10111010);
-    let gfill = Command::GFill(NCD::new(0, -1, 0), FCD::new(10, -15, 20)).encode();
-    assert_eq!(gfill.len(), 4);
-    assert_eq!(gfill[0], 0b01010001);
-    assert_eq!(gfill[1], 0b00101000);
-    assert_eq!(gfill[2], 0b00001111);
-    assert_eq!(gfill[3], 0b00110010);
-    let gvoid = Command::GVoid(NCD::new(1, 0, 0), FCD::new(5, 5, -5)).encode();
-    assert_eq!(gvoid.len(), 4);
-    assert_eq!(gvoid[0], 0b10110000);
-    assert_eq!(gvoid[1], 0b00100011);
-    assert_eq!(gvoid[2], 0b00100011);
-    assert_eq!(gvoid[3], 0b00011001);
+fn command_encdec_test() {
+    let mut offset = 0;
+    let flip = Command::Flip;
+    let flip_enc = flip.encode();
+    let flip2 = Command::decode(&flip_enc[..], &mut offset).unwrap();
+    assert_eq!(flip_enc.len(), 1);
+    assert_eq!(flip_enc[0], 0b11111101);
+    assert_eq!(flip2, flip);
+    assert_eq!(offset, 1);;
+
+    let mut offset = 0;
+    let smove = Command::SMove(LLCD::new(12, 0, 0));
+    let smove_enc = smove.encode();
+    let smove2 = Command::decode(&smove_enc[..], &mut offset).unwrap();
+    assert_eq!(smove_enc.len(), 2);
+    assert_eq!(smove_enc[0], 0b00010100);
+    assert_eq!(smove_enc[1], 0b00011011);
+    assert_eq!(smove2, smove);
+    assert_eq!(offset, 2);
+
+    let mut offset = 0;
+    let smove = Command::SMove(LLCD::new(0, 0, -4));
+    let smove_enc = smove.encode();
+    let smove2 = Command::decode(&smove_enc[..], &mut offset).unwrap();
+    assert_eq!(smove_enc.len(), 2);
+    assert_eq!(smove_enc[0], 0b00110100);
+    assert_eq!(smove_enc[1], 0b00001011);
+    assert_eq!(smove2, smove);
+    assert_eq!(offset, 2);
+
+    let mut offset = 0;
+    let lmove = Command::LMove(SLCD::new(3, 0, 0), SLCD::new(0, -5, 0));
+    let lmove_enc = lmove.encode();
+    let lmove2 = Command::decode(&lmove_enc[..], &mut offset).unwrap();
+    assert_eq!(lmove_enc.len(), 2);
+    assert_eq!(lmove_enc[0], 0b10011100);
+    assert_eq!(lmove_enc[1], 0b00001000);
+    assert_eq!(lmove2, lmove);
+    assert_eq!(offset, 2);
+
+    let mut offset = 0;
+    let fusionp = Command::FusionP(NCD::new(-1, 1, 0));
+    let fusionp_enc = fusionp.encode();
+    let fusionp2 = Command::decode(&fusionp_enc[..], &mut offset).unwrap();
+    assert_eq!(fusionp_enc.len(), 1);
+    assert_eq!(fusionp_enc[0], 0b00111111);
+    assert_eq!(fusionp2, fusionp);
+    assert_eq!(offset, 1);
+
+    let mut offset = 0;
+    let fusions = Command::FusionS(NCD::new(1, -1, 0));
+    let fusions_enc = fusions.encode();
+    let fusions2 = Command::decode(&fusions_enc[..], &mut offset).unwrap();
+    assert_eq!(fusions_enc.len(), 1);
+    assert_eq!(fusions_enc[0], 0b10011110);
+    assert_eq!(fusions2, fusions);
+    assert_eq!(offset, 1);
+
+    let mut offset = 0;
+    let fission = Command::Fission(NCD::new(0, 0, 1), 5);
+    let fission_enc = fission.encode();
+    let fission2 = Command::decode(&fission_enc[..], &mut offset).unwrap();
+    assert_eq!(fission_enc.len(), 2);
+    assert_eq!(fission_enc[0], 0b01110101);
+    assert_eq!(fission_enc[1], 0b00000101);
+    assert_eq!(fission2, fission);
+    assert_eq!(offset, 2);
+
+    let mut offset = 0;
+    let fill = Command::Fill(NCD::new(0, -1, 0));
+    let fill_enc = fill.encode();
+    let fill2 = Command::decode(&fill_enc[..], &mut offset).unwrap();
+    assert_eq!(fill_enc.len(), 1);
+    assert_eq!(fill_enc[0], 0b01010011);
+    assert_eq!(fill2, fill);
+    assert_eq!(offset, 1);
+
+    let mut offset = 0;
+    let void = Command::Void(NCD::new(1, 0, 1));
+    let void_enc = void.encode();
+    let void2 = Command::decode(&void_enc[..], &mut offset).unwrap();
+    assert_eq!(void_enc.len(), 1);
+    assert_eq!(void_enc[0], 0b10111010);
+    assert_eq!(void2, void);
+    assert_eq!(offset, 1);
+
+    let mut offset = 0;
+    let gfill = Command::GFill(NCD::new(0, -1, 0), FCD::new(10, -15, 20));
+    let gfill_enc = gfill.encode();
+    let gfill2 = Command::decode(&gfill_enc[..], &mut offset).unwrap();
+    assert_eq!(gfill_enc.len(), 4);
+    assert_eq!(gfill_enc[0], 0b01010001);
+    assert_eq!(gfill_enc[1], 0b00101000);
+    assert_eq!(gfill_enc[2], 0b00001111);
+    assert_eq!(gfill_enc[3], 0b00110010);
+    assert_eq!(gfill2, gfill);
+    assert_eq!(offset, 4);
+
+    let mut offset = 0;
+    let gvoid = Command::GVoid(NCD::new(1, 0, 0), FCD::new(5, 5, -5));
+    let gvoid_enc = gvoid.encode();
+    let gvoid2 = Command::decode(&gvoid_enc[..], &mut offset).unwrap();
+    assert_eq!(gvoid_enc.len(), 4);
+    assert_eq!(gvoid_enc[0], 0b10110000);
+    assert_eq!(gvoid_enc[1], 0b00100011);
+    assert_eq!(gvoid_enc[2], 0b00100011);
+    assert_eq!(gvoid_enc[3], 0b00011001);
+    assert_eq!(gvoid2, gvoid);
+    assert_eq!(offset, 4);
 }
 
 pub trait CD {
