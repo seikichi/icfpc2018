@@ -3,6 +3,7 @@ use ai::utils::*;
 use ai::AssembleAI;
 use common::*;
 use model::*;
+use state::State;
 use std::cmp::min;
 
 pub struct GridFissionAI {}
@@ -21,6 +22,9 @@ impl AssembleAI for GridFissionAI {
                 return vec![Command::Halt];
             }
         };
+        let r = model.matrix.len();
+        let state = State::initial(r);
+
         let x_size = (bounding.max_x - bounding.min_x + 1) as usize;
         let z_size = (bounding.max_z - bounding.min_z + 1) as usize;
 
@@ -32,7 +36,11 @@ impl AssembleAI for GridFissionAI {
         commands.extend(move_straight_x(bounding.min_x));
         commands.extend(move_straight_z(bounding.min_z));
         commands.push(Command::Flip);
-        commands.extend(generate_devide_commands((x_size, z_size), (xsplit, zsplit)));
+        commands.extend(
+            generate_devide_commands((x_size, z_size), (xsplit, zsplit))
+                .iter()
+                .flat_map(|v| v.iter()),
+        );
 
         let mut commands_list: Vec<Vec<Command>> = vec![];
 
@@ -96,7 +104,11 @@ impl AssembleAI for GridFissionAI {
             }
         }
 
-        commands.extend(generate_concur_commands((x_size, z_size), (xsplit, zsplit)));
+        commands.extend(
+            generate_concur_commands((x_size, z_size), (xsplit, zsplit))
+                .iter()
+                .flat_map(|v| v.iter()),
+        );
         commands.extend(move_straight_x(-bounding.min_x));
         commands.extend(move_straight_z(-bounding.min_z));
         commands.extend(move_straight_y(-(bounding.max_y + 1)));

@@ -32,7 +32,11 @@ impl DisassembleAI for VoidAI {
         commands.extend(move_straight_x(bounding.min_x));
         commands.extend(move_straight_z(bounding.min_z));
         commands.push(Command::Flip);
-        commands.extend(generate_devide_commands((x_size, z_size), (xsplit, zsplit)));
+        commands.extend(
+            generate_devide_commands((x_size, z_size), (xsplit, zsplit))
+                .iter()
+                .flat_map(|v| v.iter()),
+        );
 
         let mut commands_list: Vec<Vec<Command>> = vec![];
 
@@ -96,7 +100,11 @@ impl DisassembleAI for VoidAI {
             }
         }
 
-        commands.extend(generate_concur_commands((x_size, z_size), (xsplit, zsplit)));
+        commands.extend(
+            generate_concur_commands((x_size, z_size), (xsplit, zsplit))
+                .iter()
+                .flat_map(|v| v.iter()),
+        );
         commands.extend(move_straight_x(-bounding.min_x));
         commands.extend(move_straight_z(-bounding.min_z));
         commands.push(Command::Flip);

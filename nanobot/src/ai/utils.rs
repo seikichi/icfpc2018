@@ -98,20 +98,25 @@ pub fn move_straight_z(len: i32) -> Vec<Command> {
     commands
 }
 
-
-pub fn generate_devide_commands(size: (usize, usize), split: (usize, usize)) -> Vec<Command> {
+pub fn generate_devide_commands(size: (usize, usize), split: (usize, usize)) -> Vec<Vec<Command>> {
     let mut commands = vec![];
 
     let ncd_x1 = NCD::new(1, 0, 0);
     for i in 0..(split.0 - 1) {
         let rest = split.1 * (split.0 - i - 1);
-        commands.extend(repeat(Command::Wait).take(i));
-        commands.push(Command::Fission(ncd_x1.clone(), rest - 1));
+
+        let mut step = vec![];
+        step.extend(repeat(Command::Wait).take(i));
+        step.push(Command::Fission(ncd_x1.clone(), rest - 1));
+        commands.push(step);
+
         let width = (size.0 / split.0) as i32 + if i < size.0 % split.0 { 1 } else { 0 };
         let x_moves = move_straight_x(width - 1);
         for m in x_moves.into_iter() {
-            commands.extend(repeat(Command::Wait).take(i + 1));
-            commands.push(m);
+            let mut step = vec![];
+            step.extend(repeat(Command::Wait).take(i + 1));
+            step.push(m);
+            commands.push(step);
         }
     }
 
@@ -122,24 +127,31 @@ pub fn generate_devide_commands(size: (usize, usize), split: (usize, usize)) -> 
         let z_moves = move_straight_z(width - 1);
 
         if i == 0 {
-            commands.extend(repeat(fussion).take(split.0));
-            for m in z_moves.iter() {
-                commands.extend(repeat(Command::Wait).take(split.0));
-                commands.extend(repeat(m.clone()).take(split.0));
-            }
-        } else {
-            commands.extend(repeat(Command::Wait).take(split.0));
-            for _ in 0..split.0 {
-                commands.extend(repeat(Command::Wait).take(i - 1));
-                commands.push(fussion.clone());
-            }
+            commands.push(repeat(fussion).take(split.0).collect());
 
             for m in z_moves.iter() {
-                commands.extend(repeat(Command::Wait).take(split.0));
+                let mut step = vec![];
+                step.extend(repeat(Command::Wait).take(split.0));
+                step.extend(repeat(m.clone()).take(split.0));
+                commands.push(step);
+            }
+        } else {
+            let mut step = vec![];
+            step.extend(repeat(Command::Wait).take(split.0));
+            for _ in 0..split.0 {
+                step.extend(repeat(Command::Wait).take(i - 1));
+                step.push(fussion.clone());
+            }
+            commands.push(step);
+
+            for m in z_moves.iter() {
+                let mut step = vec![];
+                step.extend(repeat(Command::Wait).take(split.0));
                 for _ in 0..split.0 {
-                    commands.extend(repeat(Command::Wait).take(i));
-                    commands.push(m.clone());
+                    step.extend(repeat(Command::Wait).take(i));
+                    step.push(m.clone());
                 }
+                commands.push(step);
             }
         }
     }
@@ -147,7 +159,7 @@ pub fn generate_devide_commands(size: (usize, usize), split: (usize, usize)) -> 
     commands
 }
 
-pub fn generate_concur_commands(size: (usize, usize), split: (usize, usize)) -> Vec<Command> {
+pub fn generate_concur_commands(size: (usize, usize), split: (usize, usize)) -> Vec<Vec<Command>> {
     let mut commands = vec![];
 
     // concur z axis
@@ -164,28 +176,36 @@ pub fn generate_concur_commands(size: (usize, usize), split: (usize, usize)) -> 
         if i == split.1 - 2 {
             // last
             for m in z_moves.iter() {
-                commands.extend(repeat(Command::Wait).take(split.0));
-                commands.extend(repeat(m.clone()).take(split.0));
+                let mut step = vec![];
+                step.extend(repeat(Command::Wait).take(split.0));
+                step.extend(repeat(m.clone()).take(split.0));
+                commands.push(step);
             }
-            commands.extend(repeat(Command::FusionP(ncd_z1.clone())).take(split.0));
-            commands.extend(repeat(Command::FusionS(ncd_z_1.clone())).take(split.0));
+            let mut step = vec![];
+            step.extend(repeat(Command::FusionP(ncd_z1.clone())).take(split.0));
+            step.extend(repeat(Command::FusionS(ncd_z_1.clone())).take(split.0));
+            commands.push(step);
         } else {
             let z_rest = split.1 - i - 1; // ignore first line
 
             for m in z_moves.iter() {
-                commands.extend(repeat(Command::Wait).take(split.0));
+                let mut step = vec![];
+                step.extend(repeat(Command::Wait).take(split.0));
                 for _ in 0..split.0 {
-                    commands.extend(repeat(Command::Wait).take(z_rest - 1));
-                    commands.push(m.clone());
+                    step.extend(repeat(Command::Wait).take(z_rest - 1));
+                    step.push(m.clone());
                 }
+                commands.push(step);
             }
 
-            commands.extend(repeat(Command::Wait).take(split.0));
+            let mut step = vec![];
+            step.extend(repeat(Command::Wait).take(split.0));
             for _ in 0..split.0 {
-                commands.extend(repeat(Command::Wait).take(z_rest - 2));
-                commands.push(Command::FusionP(ncd_z1.clone()));
-                commands.push(Command::FusionS(ncd_z_1.clone()));
+                step.extend(repeat(Command::Wait).take(z_rest - 2));
+                step.push(Command::FusionP(ncd_z1.clone()));
+                step.push(Command::FusionS(ncd_z_1.clone()));
             }
+            commands.push(step);
         }
     }
 
@@ -200,18 +220,21 @@ pub fn generate_concur_commands(size: (usize, usize), split: (usize, usize)) -> 
         };
         let x_moves = move_straight_x(-(width - 1));
         for m in x_moves.into_iter() {
-            commands.extend(repeat(Command::Wait).take(split.0 - i - 1));
-            commands.push(m);
+            let mut step = vec![];
+            step.extend(repeat(Command::Wait).take(split.0 - i - 1));
+            step.push(m);
+            commands.push(step);
         }
         // fusion
-        commands.extend(repeat(Command::Wait).take(split.0 - i - 2));
-        commands.push(Command::FusionP(ncd_x1.clone()));
-        commands.push(Command::FusionS(ncd_x_1.clone()));
+        let mut step = vec![];
+        step.extend(repeat(Command::Wait).take(split.0 - i - 2));
+        step.push(Command::FusionP(ncd_x1.clone()));
+        step.push(Command::FusionS(ncd_x_1.clone()));
+        commands.push(step);
     }
 
     commands
 }
-
 
 #[test]
 fn test_bounding_box() {
@@ -232,11 +255,10 @@ fn test_bounding_box() {
     assert_eq!(2, bounding.max_z);
 }
 
-
 #[test]
 fn test_generate_devide_commands_with_1x1() {
     let commands = generate_devide_commands((5, 4), (1, 1));
-    let expect: Vec<Command> = vec![];
+    let expect: Vec<Vec<Command>> = vec![];
     assert_eq!(expect, commands);
 }
 
@@ -250,31 +272,32 @@ fn test_generate_devide_commands_with_2x3() {
 
     let commands = generate_devide_commands((4, 6), (2, 3));
     let expect = vec![
-        // step
-        Command::Fission(ncd_x1.clone(), 2),
-        // step
-        Command::Wait,
-        Command::SMove(llcd_x1.clone()),
-        // step
-        Command::Fission(ncd_z1.clone(), 1),
-        Command::Fission(ncd_z1.clone(), 1),
-        // step
-        Command::Wait,
-        Command::Wait,
-        Command::SMove(llcd_z1.clone()),
-        Command::SMove(llcd_z1.clone()),
-        // step
-        Command::Wait,
-        Command::Wait,
-        Command::Fission(ncd_z1.clone(), 0),
-        Command::Fission(ncd_z1.clone(), 0),
-        // Step
-        Command::Wait,
-        Command::Wait,
-        Command::Wait,
-        Command::SMove(llcd_z1.clone()),
-        Command::Wait,
-        Command::SMove(llcd_z1.clone()),
+        vec![Command::Fission(ncd_x1.clone(), 2)],
+        vec![Command::Wait, Command::SMove(llcd_x1.clone())],
+        vec![
+            Command::Fission(ncd_z1.clone(), 1),
+            Command::Fission(ncd_z1.clone(), 1),
+        ],
+        vec![
+            Command::Wait,
+            Command::Wait,
+            Command::SMove(llcd_z1.clone()),
+            Command::SMove(llcd_z1.clone()),
+        ],
+        vec![
+            Command::Wait,
+            Command::Wait,
+            Command::Fission(ncd_z1.clone(), 0),
+            Command::Fission(ncd_z1.clone(), 0),
+        ],
+        vec![
+            Command::Wait,
+            Command::Wait,
+            Command::Wait,
+            Command::SMove(llcd_z1.clone()),
+            Command::Wait,
+            Command::SMove(llcd_z1.clone()),
+        ],
     ];
 
     assert_eq!(expect, commands);
@@ -290,19 +313,18 @@ fn test_generate_devide_commands_with_2x2() {
 
     let commands = generate_devide_commands((3, 5), (2, 2));
     let expect = vec![
-        // step
-        Command::Fission(ncd_x1.clone(), 1),
-        // step
-        Command::Wait,
-        Command::SMove(llcd_x1.clone()),
-        // step
-        Command::Fission(ncd_z1.clone(), 0),
-        Command::Fission(ncd_z1.clone(), 0),
-        // step
-        Command::Wait,
-        Command::Wait,
-        Command::SMove(llcd_z2.clone()),
-        Command::SMove(llcd_z2.clone()),
+        vec![Command::Fission(ncd_x1.clone(), 1)],
+        vec![Command::Wait, Command::SMove(llcd_x1.clone())],
+        vec![
+            Command::Fission(ncd_z1.clone(), 0),
+            Command::Fission(ncd_z1.clone(), 0),
+        ],
+        vec![
+            Command::Wait,
+            Command::Wait,
+            Command::SMove(llcd_z2.clone()),
+            Command::SMove(llcd_z2.clone()),
+        ],
     ];
 
     assert_eq!(expect, commands);
@@ -315,22 +337,21 @@ fn test_generate_devide_commands_with_3x2() {
 
     let commands = generate_devide_commands((3, 3), (3, 3));
     let expect = vec![
-        // step
-        Command::Fission(ncd_x1.clone(), 5),
-        // step
-        Command::Wait,
-        Command::Fission(ncd_x1.clone(), 2),
-        // step
-        Command::Fission(ncd_z1.clone(), 1),
-        Command::Fission(ncd_z1.clone(), 1),
-        Command::Fission(ncd_z1.clone(), 1),
-        // step
-        Command::Wait,
-        Command::Wait,
-        Command::Wait,
-        Command::Fission(ncd_z1.clone(), 0),
-        Command::Fission(ncd_z1.clone(), 0),
-        Command::Fission(ncd_z1.clone(), 0),
+        vec![Command::Fission(ncd_x1.clone(), 5)],
+        vec![Command::Wait, Command::Fission(ncd_x1.clone(), 2)],
+        vec![
+            Command::Fission(ncd_z1.clone(), 1),
+            Command::Fission(ncd_z1.clone(), 1),
+            Command::Fission(ncd_z1.clone(), 1),
+        ],
+        vec![
+            Command::Wait,
+            Command::Wait,
+            Command::Wait,
+            Command::Fission(ncd_z1.clone(), 0),
+            Command::Fission(ncd_z1.clone(), 0),
+            Command::Fission(ncd_z1.clone(), 0),
+        ],
     ];
 
     assert_eq!(expect, commands);
@@ -339,7 +360,7 @@ fn test_generate_devide_commands_with_3x2() {
 #[test]
 fn test_generate_concur_commands_with_1x1() {
     let commands = generate_concur_commands((5, 4), (1, 1));
-    let expect: Vec<Command> = vec![];
+    let expect: Vec<Vec<Command>> = vec![];
     assert_eq!(expect, commands);
 }
 
@@ -354,23 +375,24 @@ fn test_generate_concur_commands_with_2x2() {
     let llcd_z_2 = LLCD::new(0, 0, -2);
 
     let commands = generate_concur_commands((3, 5), (2, 2));
-    let expect: Vec<Command> = vec![
-        // step
-        Command::Wait,
-        Command::Wait,
-        Command::SMove(llcd_z_2.clone()),
-        Command::SMove(llcd_z_2.clone()),
-        // step
-        Command::FusionP(ncd_z1.clone()),
-        Command::FusionP(ncd_z1.clone()),
-        Command::FusionS(ncd_z_1.clone()),
-        Command::FusionS(ncd_z_1.clone()),
-        // step
-        Command::Wait,
-        Command::SMove(llcd_x_1.clone()),
-        // step
-        Command::FusionP(ncd_x1.clone()),
-        Command::FusionS(ncd_x_1.clone()),
+    let expect = vec![
+        vec![
+            Command::Wait,
+            Command::Wait,
+            Command::SMove(llcd_z_2.clone()),
+            Command::SMove(llcd_z_2.clone()),
+        ],
+        vec![
+            Command::FusionP(ncd_z1.clone()),
+            Command::FusionP(ncd_z1.clone()),
+            Command::FusionS(ncd_z_1.clone()),
+            Command::FusionS(ncd_z_1.clone()),
+        ],
+        vec![Command::Wait, Command::SMove(llcd_x_1.clone())],
+        vec![
+            Command::FusionP(ncd_x1.clone()),
+            Command::FusionS(ncd_x_1.clone()),
+        ],
     ];
     assert_eq!(expect, commands);
 }
@@ -383,31 +405,35 @@ fn test_generate_concur_commands_with_3x3() {
     let ncd_z_1 = NCD::new(0, 0, -1);
 
     let commands = generate_concur_commands((3, 3), (3, 3));
-    let expect: Vec<Command> = vec![
-        // step
-        Command::Wait,
-        Command::Wait,
-        Command::Wait,
-        Command::FusionP(ncd_z1.clone()),
-        Command::FusionS(ncd_z_1.clone()),
-        Command::FusionP(ncd_z1.clone()),
-        Command::FusionS(ncd_z_1.clone()),
-        Command::FusionP(ncd_z1.clone()),
-        Command::FusionS(ncd_z_1.clone()),
-        // step
-        Command::FusionP(ncd_z1.clone()),
-        Command::FusionP(ncd_z1.clone()),
-        Command::FusionP(ncd_z1.clone()),
-        Command::FusionS(ncd_z_1.clone()),
-        Command::FusionS(ncd_z_1.clone()),
-        Command::FusionS(ncd_z_1.clone()),
-        // step
-        Command::Wait,
-        Command::FusionP(ncd_x1.clone()),
-        Command::FusionS(ncd_x_1.clone()),
-        // step
-        Command::FusionP(ncd_x1.clone()),
-        Command::FusionS(ncd_x_1.clone()),
+    let expect = vec![
+        vec![
+            Command::Wait,
+            Command::Wait,
+            Command::Wait,
+            Command::FusionP(ncd_z1.clone()),
+            Command::FusionS(ncd_z_1.clone()),
+            Command::FusionP(ncd_z1.clone()),
+            Command::FusionS(ncd_z_1.clone()),
+            Command::FusionP(ncd_z1.clone()),
+            Command::FusionS(ncd_z_1.clone()),
+        ],
+        vec![
+            Command::FusionP(ncd_z1.clone()),
+            Command::FusionP(ncd_z1.clone()),
+            Command::FusionP(ncd_z1.clone()),
+            Command::FusionS(ncd_z_1.clone()),
+            Command::FusionS(ncd_z_1.clone()),
+            Command::FusionS(ncd_z_1.clone()),
+        ],
+        vec![
+            Command::Wait,
+            Command::FusionP(ncd_x1.clone()),
+            Command::FusionS(ncd_x_1.clone()),
+        ],
+        vec![
+            Command::FusionP(ncd_x1.clone()),
+            Command::FusionS(ncd_x_1.clone()),
+        ],
     ];
     assert_eq!(expect, commands);
 }
