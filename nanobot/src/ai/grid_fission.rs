@@ -5,6 +5,7 @@ use common::*;
 use model::*;
 use state::State;
 use std::cmp::min;
+use std::iter::repeat;
 
 pub struct GridFissionAI {}
 
@@ -32,7 +33,7 @@ impl AssembleAI for GridFissionAI {
         let xsplit = min(x_size, 8);
         let zsplit = min(z_size, 5);
 
-        let harmonty_high = false;
+        let mut harmonity_high = false;
 
         let mut commands = vec![];
         commands.extend(move_straight_x(bounding.min_x));
@@ -40,12 +41,12 @@ impl AssembleAI for GridFissionAI {
 
         for m in commands.iter() {
             let v = vec![m.clone()];
-            state.update_time_step(&v).expect("failed to move");
+            state.update_time_step(&v[..]).expect("failed to move");
         }
 
         for v in generate_devide_commands((x_size, z_size), (xsplit, zsplit)).into_iter() {
+            state.update_time_step(&v[..]).expect("failed to devide");
             commands.extend(v);
-            state.update_time_step(v).expect("failed to generate");
         }
 
         let mut commands_list: Vec<Vec<Command>> = vec![];
@@ -96,20 +97,37 @@ impl AssembleAI for GridFissionAI {
         let mut index = 0;
         loop {
             let mut all_wait = true;
+            let mut step = vec![];
             for v in commands_list.iter() {
-                commands.push(if index >= v.len() {
+                step.push(if index >= v.len() {
                     Command::Wait
                 } else {
                     all_wait = false;
                     v[index].clone()
                 });
             }
-            index += 1;
             if all_wait {
                 break;
             }
+
+            if !harmonity_high {
+                match state.update_time_step(&step[..]) {
+                    Ok(_) => {}
+                    Err(_) => {
+                        harmonity_high = true;
+                        commands.push(Command::Flip);
+                        commands.extend(repeat(Command::Wait).take(commands_list.len() - 1));
+                    }
+                }
+            }
+            commands.extend(step);
+            index += 1;
         }
 
+        if harmonity_high {
+            commands.push(Command::Flip);
+            commands.extend(repeat(Command::Wait).take(commands_list.len() - 1));
+        }
         commands.extend(
             generate_concur_commands((x_size, z_size), (xsplit, zsplit))
                 .iter()
@@ -118,9 +136,6 @@ impl AssembleAI for GridFissionAI {
         commands.extend(move_straight_x(-bounding.min_x));
         commands.extend(move_straight_z(-bounding.min_z));
         commands.extend(move_straight_y(-(bounding.max_y + 1)));
-        if harmonty_high {
-            commands.push(Command::Flip);
-        }
         commands.push(Command::Halt);
         commands
     }
