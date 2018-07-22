@@ -379,6 +379,8 @@ impl State {
                     deleted_bot_bids: vec![],
                 })
             }
+
+            _ => unimplemented!(),
         }
     }
 
