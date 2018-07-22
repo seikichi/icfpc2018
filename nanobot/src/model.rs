@@ -8,6 +8,11 @@ pub struct Model {
 }
 
 impl Model {
+    pub fn initial(r: usize) -> Model {
+        Model {
+            matrix: vec![vec![vec![Voxel::Void; r]; r]; r],
+        }
+    }
     pub fn new<T: BufRead>(reader: &mut T) -> Result<Self, Box<Error>> {
         let mut buffer = [0; 1];
         reader.read(&mut buffer)?;
