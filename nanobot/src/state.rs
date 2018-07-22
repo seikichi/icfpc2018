@@ -395,6 +395,10 @@ impl State {
                 })
             }
 
+            Command::GVoid(ncd, fcd) => {
+                let region = Region(c + ncd, c + ncd + fcd);
+            }
+
             _ => unimplemented!(),
         }
     }

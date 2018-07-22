@@ -376,6 +376,12 @@ impl<'a> Add<&'a CD> for Position {
 pub struct Region(pub Position, pub Position);
 
 impl Region {
+    pub fn dimension(&self) -> i32 {
+        (if self.0.x == self.1.x { 0 } else { 1 }) +
+            (if self.0.y == self.1.y { 0 } else { 1 }) +
+            (if self.0.z == self.1.z { 0 } else { 1 })
+    }
+
     pub fn canonical(&self) -> Region {
         let p1 = Position::new(
             min(self.0.x, self.1.x),
