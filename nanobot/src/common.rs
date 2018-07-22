@@ -172,6 +172,12 @@ impl NCD {
     pub fn encode(&self) -> u8 {
         ((self.x + 1) * 9 + (self.y + 1) * 3 + (self.z + 1)) as u8
     }
+    pub fn decode(v: u8) -> Self {
+        let x = v as i32 / 9 % 3 - 1;
+        let y = v as i32 / 3 % 3 - 1;
+        let z = v as i32 / 1 % 3 - 1;
+        Self::new(x, y, z)
+    }
 }
 
 impl CD for NCD {
@@ -187,9 +193,11 @@ impl CD for NCD {
 }
 
 #[test]
-fn ncd_encode_test() {
+fn ncd_encdec_test() {
     let ncd = NCD::new(1, 0, 0);
     assert_eq!(ncd.encode(), 18 + 3 + 1);
+    let ncd2 = NCD::decode(ncd.encode());
+    assert_eq!(ncd2, ncd);
 }
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug)]
@@ -212,6 +220,12 @@ impl FCD {
             (self.z + 30) as u8,
         )
     }
+    pub fn decode(v1: u8, v2: u8, v3: u8) -> Self {
+        let x = v1 as i32 - 30;
+        let y = v2 as i32 - 30;
+        let z = v3 as i32 - 30;
+        Self::new(x, y, z)
+    }
 }
 
 impl CD for FCD {
@@ -227,12 +241,14 @@ impl CD for FCD {
 }
 
 #[test]
-fn fcd_encode_test() {
+fn fcd_encdec_test() {
     let fcd = FCD::new(20, 10, -5);
     let enc = fcd.encode();
     assert_eq!(enc.0, 50);
     assert_eq!(enc.1, 40);
     assert_eq!(enc.2, 25);
+    let fcd2 = FCD::decode(enc.0, enc.1, enc.2);
+    assert_eq!(fcd2, fcd);
 }
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug)]
@@ -262,6 +278,21 @@ impl SLCD {
         };
         (ret.0, ret.1 as u8)
     }
+    pub fn decode(v1: u8, v2: u8) -> Self {
+        let mut x = 0;
+        let mut y = 0;
+        let mut z = 0;
+        if v1 == 0b01 {
+            x = v2 as i32 - 5;
+        } else if v1 == 0b10 {
+            y = v2 as i32 - 5;
+        } else if v1 == 0b11 {
+            z = v2 as i32 - 5;
+        } else {
+            assert!(false);
+        }
+        Self::new(x, y, z)
+    }
 }
 
 impl CD for SLCD {
@@ -277,11 +308,13 @@ impl CD for SLCD {
 }
 
 #[test]
-fn slcd_encode_test() {
+fn slcd_encdec_test() {
     let slcd = SLCD::new(-3, 0, 0);
     let enc = slcd.encode();
     assert_eq!(enc.0, 1);
     assert_eq!(enc.1, 2);
+    let slcd2 = SLCD::decode(enc.0, enc.1);
+    assert_eq!(slcd2, slcd);
 }
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug)]
@@ -311,6 +344,21 @@ impl LLCD {
         };
         (ret.0, ret.1 as u8)
     }
+    pub fn decode(v1: u8, v2: u8) -> Self {
+        let mut x = 0;
+        let mut y = 0;
+        let mut z = 0;
+        if v1 == 0b01 {
+            x = v2 as i32 - 15;
+        } else if v1 == 0b10 {
+            y = v2 as i32 - 15;
+        } else if v1 == 0b11 {
+            z = v2 as i32 - 15;
+        } else {
+            assert!(false);
+        }
+        Self::new(x, y, z)
+    }
 }
 
 impl CD for LLCD {
@@ -326,11 +374,13 @@ impl CD for LLCD {
 }
 
 #[test]
-fn llcd_encode_test() {
+fn llcd_encdec_test() {
     let llcd = LLCD::new(0, 10, 0);
     let enc = llcd.encode();
     assert_eq!(enc.0, 2);
     assert_eq!(enc.1, 25);
+    let llcd2 = LLCD::decode(enc.0, enc.1);
+    assert_eq!(llcd2, llcd);
 }
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug, Hash)]
