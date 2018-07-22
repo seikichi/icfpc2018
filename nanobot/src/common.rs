@@ -2,6 +2,7 @@ use std::cmp::*;
 use std::error::*;
 use std::fmt;
 use std::fs;
+use std::io::Read;
 use std::io::Write;
 use std::ops::Add;
 use std::path::Path;
@@ -648,6 +649,15 @@ pub fn encode_trace(trace: &[Command]) -> Vec<u8> {
     ret
 }
 
+pub fn decode_trace(input: &[u8]) -> Vec<Command> {
+    let mut ret = Vec::with_capacity(input.len() / 4);
+    let mut offset = 0;
+    while offset < input.len() {
+        ret.push(Command::decode(input, &mut offset).unwrap());
+    }
+    ret
+}
+
 #[test]
 fn encode_trace_test() {
     let fusions = Command::FusionS(NCD::new(1, -1, 0));
@@ -658,10 +668,20 @@ fn encode_trace_test() {
     assert_eq!(result[0], 0b10011110);
     assert_eq!(result[1], 0b01110101);
     assert_eq!(result[2], 0b00000101);
+    let trace2 = decode_trace(&result[..]);
+    assert_eq!(trace2, trace);
 }
 
 pub fn write_trace_file(path: &Path, trace: &[Command]) -> Result<(), Box<Error>> {
     let mut buffer = fs::File::create(path)?;
     buffer.write_all(&encode_trace(trace)[..])?;
     Ok(())
+}
+
+pub fn read_trace_file(path: &Path) -> Result<Vec<Command>, Box<Error>> {
+    let mut f = fs::File::open(path)?;
+    let mut buffer = vec![];
+    f.read_to_end(&mut buffer);
+    let ret = decode_trace(&buffer[..]);
+    Ok(ret)
 }
