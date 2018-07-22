@@ -10,7 +10,7 @@ use std::io::BufReader;
 use std::path::Path;
 use std::process;
 
-use ai::builder::build_assembler;
+use ai::builder::*;
 use ai::config::Config;
 use common::write_trace_file;
 use model::Model;
@@ -25,6 +25,8 @@ fn main() {
     let task = &args[1];
     match &task[..] {
         "assemble" => assemble(&args),
+        "disassemble" => disassemble(&args),
+        "reassemble" => reassemble(&args),
         _ => {
             usage(&args);
             process::exit(1);
@@ -33,15 +35,50 @@ fn main() {
 }
 
 fn assemble(args: &Vec<String>) {
-    let f = File::open(args[2].clone()).expect("file not found");
+    let f = File::open(args[2].clone()).expect("target file not found");
     let mut f = BufReader::new(f);
-    let model = Model::new(&mut f).expect("failed to open model");
+    let target = Model::new(&mut f).expect("failed to open target model");
 
     let trace_output_path = Path::new(&args[3]);
     let config = Config::new();
     let name = env::var("GOLD_AI").expect("failed to get AI from ENV");
     let ai = build_assembler(&name, &config);
-    let commands = ai.assemble(&model);
+    let commands = ai.assemble(&target);
+    write_trace_file(trace_output_path, &commands).expect("failed to write trace");
+}
+
+fn disassemble(args: &Vec<String>) {
+    let f = File::open(args[2].clone()).expect("source file not found");
+    let mut f = BufReader::new(f);
+    let source = Model::new(&mut f).expect("failed to open source model");
+
+    let trace_output_path = Path::new(&args[3]);
+    let config = Config::new();
+    let name = env::var("GOLD_AI").expect("failed to get AI from ENV");
+    let ai = build_disassembler(&name, &config);
+    let commands = ai.disassemble(&source);
+    write_trace_file(trace_output_path, &commands).expect("failed to write trace");
+}
+
+fn reassemble(args: &Vec<String>) {
+    if args.len() < 4 {
+        usage(&args);
+        process::exit(1);
+    }
+
+    let f = File::open(args[2].clone()).expect("source file not found");
+    let mut f = BufReader::new(f);
+    let source = Model::new(&mut f).expect("failed to open source model");
+
+    let f = File::open(args[3].clone()).expect("target file not found");
+    let mut f = BufReader::new(f);
+    let target = Model::new(&mut f).expect("failed to open target model");
+
+    let trace_output_path = Path::new(&args[4]);
+    let config = Config::new();
+    let name = env::var("GOLD_AI").expect("failed to get AI from ENV");
+    let ai = build_reassembler(&name, &config);
+    let commands = ai.reassemble(&source, &target);
     write_trace_file(trace_output_path, &commands).expect("failed to write trace");
 }
 
@@ -62,8 +99,10 @@ GOLD_AI=default
 
 ## Optional
 
-GOLD_ASSEMBLER
-GOLD_DISASSEMBLER
+### GOLD_AI=default
+
+GOLD_ASSEMBLER=default
+GOLD_DISASSEMBLER=default
 ...
 ",
         args[0]
