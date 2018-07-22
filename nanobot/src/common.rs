@@ -683,6 +683,27 @@ impl PartialEq for Nanobot {
     }
 }
 
+impl Nanobot {
+    pub fn fission(&mut self, ncd: &NCD, m: usize) -> Nanobot {
+        let new_c = self.pos + ncd;
+        assert!(0 <= new_c.x && 0 <= new_c.y && 0 <= new_c.z);
+        assert!(m < self.seeds.len());
+
+        let new_bot = Nanobot {
+            bid: self.seeds[0],
+            pos: new_c,
+            seeds: self.seeds[1..m + 1].to_vec(),
+        };
+        self.seeds = self.seeds[m + 1..].to_vec();
+        new_bot
+    }
+    pub fn fusion(&mut self, secondary_bot: &mut Nanobot) {
+        self.seeds.push(secondary_bot.bid);
+        self.seeds.append(&mut secondary_bot.seeds);
+        self.seeds.sort();
+    }
+}
+
 pub fn encode_trace(trace: &[Command]) -> Vec<u8> {
     let mut ret = Vec::with_capacity(trace.len() * 1);
     for t in trace.iter() {

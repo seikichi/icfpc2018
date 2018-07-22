@@ -407,14 +407,7 @@ impl State {
                     return Err(Box::new(SimulationError::new(message)));
                 }
 
-                let new_bot = Nanobot {
-                    bid: bot.seeds[0],
-                    pos: new_c,
-                    seeds: bot.seeds[1..m + 1].to_vec(),
-                };
-
-                bot.seeds = bot.seeds[m + 1..].to_vec();
-
+                let new_bot = bot.fission(ncd, *m);
                 self.energy += 24;
 
                 Ok(UpdateOneOutput {
@@ -461,9 +454,7 @@ impl State {
                 let mut secondary_bot = self.bots[secondary_bot_index].clone();
 
                 let bot = &mut self.bots[nanobot_index];
-                bot.seeds.push(secondary_bot.bid);
-                bot.seeds.append(&mut secondary_bot.seeds);
-                bot.seeds.sort();
+                bot.fusion(&mut secondary_bot);
                 self.energy -= 24;
 
                 Ok(UpdateOneOutput {
