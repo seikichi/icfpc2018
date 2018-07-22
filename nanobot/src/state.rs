@@ -44,6 +44,7 @@ impl State {
         let r = model.matrix.len();
         let mut state = State::initial(r);
         state.matrix = model.matrix.clone();
+        state.connectivity_is_dirty = true;
         state
     }
     pub fn get_energy(&self) -> i64 {
@@ -281,9 +282,9 @@ impl State {
         self.connectivity = UnionFind::new(r * r * r + 1);
         self.full_voxel_count = 0;
 
-        for (z, vz) in self.matrix.iter().enumerate() {
-            for (y, vy) in vz.iter().enumerate() {
-                for (x, &voxel) in vy.iter().enumerate() {
+        for (x, vx) in self.matrix.iter().enumerate() {
+            for (y, vy) in vx.iter().enumerate() {
+                for (z, &voxel) in vy.iter().enumerate() {
                     if voxel == Voxel::Full {
                         let p = Position::new(x as i32, y as i32, z as i32);
                         if y == 0 {
