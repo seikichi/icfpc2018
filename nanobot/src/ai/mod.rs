@@ -3,6 +3,7 @@ use super::model::*;
 
 pub mod builder;
 pub mod config;
+pub mod void;
 pub mod grid_fission;
 pub mod simple;
 pub mod utils;
