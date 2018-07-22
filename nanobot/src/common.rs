@@ -6,8 +6,7 @@ use std::fmt;
 use std::fs;
 use std::io::Read;
 use std::io::Write;
-use std::ops::Add;
-use std::ops::Sub;
+use std::ops::{Add, Sub};
 use std::path::Path;
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug)]
