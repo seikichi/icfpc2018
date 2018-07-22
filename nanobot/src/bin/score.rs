@@ -90,6 +90,11 @@ fn main() {
         }
         offset += bot_cnt;
     }
+    if !state.same_model(&target_model) {
+        println!("Failure::");
+        println!("Halted with missing or excess filled coordinates");
+        panic!("Halted with missing or excess filled coordinates")
+    }
 
     println!("Success:: ");
     println!("Time:      ?");
