@@ -1,13 +1,11 @@
 use super::common::*;
 use super::model::*;
 
+pub mod builder;
+pub mod config;
 pub mod grid_fission;
 pub mod simple;
 pub mod utils;
-
-pub trait AI {
-    fn generate(&self, model: &Model) -> Vec<Command>;
-}
 
 pub trait AssembleAI {
     fn assemble(&self, model: &Model) -> Vec<Command>;
@@ -21,21 +19,12 @@ pub trait ReassembleAI {
     fn reassemble(&self, source: &Model, target: &Model) -> Vec<Command>;
 }
 
-pub struct NaiveReassembleAI<D: DisassembleAI, A: AssembleAI> {
-    assembler: A,
-    disassembler: D,
+pub struct NaiveReassembleAI {
+    assembler: Box<AssembleAI>,
+    disassembler: Box<DisassembleAI>,
 }
 
-impl<D: DisassembleAI, A: AssembleAI> NaiveReassembleAI<D, A> {
-    pub fn new(disassembler: D, assembler: A) -> Self {
-        NaiveReassembleAI {
-            disassembler,
-            assembler,
-        }
-    }
-}
-
-impl<D: DisassembleAI, A: AssembleAI> ReassembleAI for NaiveReassembleAI<D, A> {
+impl ReassembleAI for NaiveReassembleAI {
     fn reassemble(&self, source: &Model, target: &Model) -> Vec<Command> {
         let mut commands = self.disassembler.disassemble(source);
         commands.pop(); // pop Halt

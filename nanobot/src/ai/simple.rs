@@ -1,5 +1,5 @@
 use ai::utils::*;
-use ai::AI;
+use ai::AssembleAI;
 use common::*;
 use model::*;
 
@@ -47,8 +47,8 @@ fn move_down(len: i32) -> Vec<Command> {
     commands
 }
 
-impl AI for SimpleAI {
-    fn generate(&self, model: &Model) -> Vec<Command> {
+impl AssembleAI for SimpleAI {
+    fn assemble(&self, model: &Model) -> Vec<Command> {
         let mut commands = vec![];
         let bounding = match calc_bounding_box(model) {
             Some(b) => b,
@@ -108,7 +108,7 @@ fn generate_commands_for_empty_3x3() {
     let model = Model { matrix };
 
     let ai = SimpleAI::new();
-    let commands = ai.generate(&model);
+    let commands = ai.assemble(&model);
     let expected = vec![Command::Halt];
 
     assert_eq!(expected, commands);
@@ -121,7 +121,7 @@ fn generate_commands_for_3x3_with_1_full_voxel() {
     let model = Model { matrix };
 
     let ai = SimpleAI::new();
-    let commands = ai.generate(&model);
+    let commands = ai.assemble(&model);
     let expected = vec![
         Command::Flip,
         // move to bounding box corner
@@ -153,7 +153,7 @@ fn generate_commands_for_3x3_with_2_full_voxels() {
     let model = Model { matrix };
 
     let ai = SimpleAI::new();
-    let commands = ai.generate(&model);
+    let commands = ai.assemble(&model);
     let expected = vec![
         Command::Flip,
         // y = 0: start filling (move -> fill)

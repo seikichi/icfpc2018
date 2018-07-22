@@ -1,22 +1,22 @@
+use ai::config::Config;
 use ai::utils::*;
-use ai::AI;
+use ai::AssembleAI;
 use common::*;
 use model::*;
 
 use std::cmp::min;
-use std::env;
 use std::iter::repeat;
 
 pub struct GridFissionAI {}
 
 impl GridFissionAI {
-    pub fn new() -> Self {
+    pub fn new(_config: &Config) -> Self {
         GridFissionAI {}
     }
 }
 
-impl AI for GridFissionAI {
-    fn generate(&self, model: &Model) -> Vec<Command> {
+impl AssembleAI for GridFissionAI {
+    fn assemble(&self, model: &Model) -> Vec<Command> {
         let bounding = match calc_bounding_box(model) {
             Some(b) => b,
             None => {
