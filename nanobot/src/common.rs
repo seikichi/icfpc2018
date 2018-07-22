@@ -684,6 +684,13 @@ impl PartialEq for Nanobot {
 }
 
 impl Nanobot {
+    pub fn initial() -> Nanobot {
+        Nanobot {
+            bid: Bid(1),
+            pos: Position::new(0, 0, 0),
+            seeds: (2..41).map(|bid| Bid(bid)).collect(),
+        }
+    }
     pub fn fission(&mut self, ncd: &NCD, m: usize) -> Nanobot {
         let new_c = self.pos + ncd;
         assert!(0 <= new_c.x && 0 <= new_c.y && 0 <= new_c.z);

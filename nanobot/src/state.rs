@@ -27,11 +27,7 @@ pub struct State {
 impl State {
     // returns inital state
     pub fn initial(r: usize) -> State {
-        let bot = Nanobot {
-            bid: Bid(1),
-            pos: Position::new(0, 0, 0),
-            seeds: (2..41).map(|bid| Bid(bid)).collect(),
-        };
+        let bot = Nanobot::initial();
         State {
             energy: 0,
             harmonics: Harmonics::Low,
