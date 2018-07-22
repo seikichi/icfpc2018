@@ -1012,6 +1012,44 @@ fn test_gvoid_commmand() {
 }
 
 #[test]
+fn test_gfill_commmand() {
+    {
+        let mut state = State::initial(10);
+
+        let gfill = Command::GFill(NCD::new(1, 0, 0), FCD::new(4, 5, 6));
+        let vc = state.update_one(0, &gfill).unwrap().vc;
+
+        // GFill でつくった範囲が Full になっていることを verify
+        let region = Region(Position::new(1, 0, 0), Position::new(5, 5, 6));
+        for p in region.iter() {
+            assert_eq!(state.voxel_at(p), Voxel::Full);
+        }
+
+        // 範囲外の点を代表していくつか verify しておく
+        assert_eq!(state.voxel_at(Position::new(6, 1, 1)), Voxel::Void);
+        assert_eq!(state.voxel_at(Position::new(1, 6, 1)), Voxel::Void);
+        assert_eq!(state.voxel_at(Position::new(1, 1, 7)), Voxel::Void);
+
+        // verify energy
+        assert_eq!(state.energy, 12 * (4 + 1) * (5 + 1) * (6 + 1));
+
+        // verify vc
+        let mut expected_vc = VolatileCoordinates::new();
+        expected_vc.insert(Position::zero());
+        expected_vc.extend(region.iter());
+        assert_eq!(vc, expected_vc);
+    }
+
+    {
+        let mut state = State::initial(10);
+
+        let gfill = Command::GFill(NCD::new(1, 0, 0), FCD::new(-1, 0, 0));
+        let r = state.update_one(0, &gfill);
+        assert!(r.is_err());
+    }
+}
+
+#[test]
 fn test_update_time_step() {
     {
         let mut state = State::initial(3);
