@@ -4,3 +4,12 @@ version = "0.1.0"
 authors = ["qwerty <qwerty.knagira@gmail.com>"]
 
 [dependencies]
+getopts = "0.2"
+
+[lib]
+name = "nanobot_lib"
+path = "src/lib.rs"
+
+[[bin]]
+name = "score"
+path = "src/bin/score.rs"
