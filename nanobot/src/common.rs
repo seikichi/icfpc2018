@@ -118,6 +118,21 @@ fn command_encode_test() {
     let fill = Command::Fill(NCD::new(0, -1, 0)).encode();
     assert_eq!(fill.len(), 1);
     assert_eq!(fill[0], 0b01010011);
+    let void = Command::Void(NCD::new(1, 0, 1)).encode();
+    assert_eq!(void.len(), 1);
+    assert_eq!(void[0], 0b10111010);
+    let gfill = Command::GFill(NCD::new(0, -1, 0), FCD::new(10, -15, 20)).encode();
+    assert_eq!(gfill.len(), 4);
+    assert_eq!(gfill[0], 0b01010001);
+    assert_eq!(gfill[1], 0b00101000);
+    assert_eq!(gfill[2], 0b00001111);
+    assert_eq!(gfill[3], 0b00110010);
+    let gvoid = Command::GVoid(NCD::new(1, 0, 0), FCD::new(5, 5, -5)).encode();
+    assert_eq!(gvoid.len(), 4);
+    assert_eq!(gvoid[0], 0b10110000);
+    assert_eq!(gvoid[1], 0b00100011);
+    assert_eq!(gvoid[2], 0b00100011);
+    assert_eq!(gvoid[3], 0b00011001);
 }
 
 pub trait CD {
