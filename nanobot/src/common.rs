@@ -28,9 +28,12 @@ pub enum Command {
     LMove(SLCD, SLCD),
     Fission(NCD, usize),
     Fill(NCD),
+    Void(NCD),
     // group
     FusionP(NCD),
     FusionS(NCD),
+    GFill(NCD, FCD),
+    GVoid(NCD, FCD),
 }
 
 impl Command {
@@ -59,6 +62,10 @@ impl Command {
                 let ncd_enc = ncd.encode();
                 vec![(ncd_enc << 3) | 0b011]
             }
+            Command::Void(ncd) => {
+                let ncd_enc = ncd.encode();
+                vec![(ncd_enc << 3) | 0b010]
+            }
             Command::FusionP(ncd) => {
                 let ncd_enc = ncd.encode();
                 vec![(ncd_enc << 3) | 0b111]
@@ -66,6 +73,16 @@ impl Command {
             Command::FusionS(ncd) => {
                 let ncd_enc = ncd.encode();
                 vec![(ncd_enc << 3) | 0b110]
+            }
+            Command::GFill(ncd, fcd) => {
+                let ncd_enc = ncd.encode();
+                let fcd_enc = fcd.encode();
+                vec![(ncd_enc << 3) | 0b001, fcd_enc.0, fcd_enc.1, fcd_enc.2]
+            }
+            Command::GVoid(ncd, fcd) => {
+                let ncd_enc = ncd.encode();
+                let fcd_enc = fcd.encode();
+                vec![(ncd_enc << 3) | 0b000, fcd_enc.0, fcd_enc.1, fcd_enc.2]
             }
         }
     }
