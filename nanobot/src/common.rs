@@ -394,6 +394,13 @@ impl Region {
         Region(p1, p2)
     }
 
+    pub fn contains(&self, p: Position) -> bool {
+        let c = self.canonical();
+        (c.0.x <= p.x && p.x <= c.1.x) &&
+            (c.0.y <= p.y && p.y <= c.1.y) &&
+            (c.0.z <= p.z && p.z <= c.1.z)
+    }
+
     pub fn iter(&self) -> impl Iterator<Item=Position> {
         let c = self.canonical();
         (c.0.z..(c.1.z + 1)).flat_map(move |z| {

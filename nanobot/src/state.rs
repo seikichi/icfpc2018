@@ -388,15 +388,47 @@ impl State {
 
             Command::FusionS(_) => {
                 // do nothing
-                Ok(UpdateOneOutput {
-                    vc: VolatileCoordinates::new(),
-                    added_bots: vec![],
-                    deleted_bot_bids: vec![],
-                })
+                Ok(UpdateOneOutput::from_vc(VolatileCoordinates::new()))
             }
 
             Command::GVoid(ncd, fcd) => {
                 let region = Region(c + ncd, c + ncd + fcd);
+                if !self.is_valid_coordinate(&region.0) || !self.is_valid_coordinate(&region.1) {
+                    let message = format!("nanobot is out of matrix: command=GVoid, c={}, ncd={:?}, fcd={:?}", c, ncd, fcd);
+                    return Err(Box::new(SimulationError::new(message)));
+                }
+                if region.contains(c) {
+                    let message = format!("nanobot is in the region: command=GVoid, c={}, ncd={:?}, fcd={:?}", c, ncd, fcd);
+                    return Err(Box::new(SimulationError::new(message)));
+                }
+
+                if region != region.canonical() {
+                    // canonical な region を持つ bot が代表してコマンドを実行するので
+                    // それ以外の GVoid はエラーチェックのみ
+                    return Ok(UpdateOneOutput::from_single_volatile_coordinate(c))
+                }
+
+                // TODO: It is also an error if boti.pos + ndi = botj.pos + ndj (for i ≠ j)
+
+                for p in region.iter() {
+                    match self.voxel_at(p) {
+                        Voxel::Full => {
+                            self.set_voxel_at(p, Voxel::Void);
+                            self.energy -= 12;
+                            self.full_voxel_count -= 1;
+                            self.connectivity_is_dirty = true;
+                        }
+                        Voxel::Void => {
+                            self.energy += 3;
+                        }
+                    }
+                }
+
+                let mut vc = VolatileCoordinates::new();
+                vc.insert(c);
+                vc.extend(region.iter());
+
+                Ok(UpdateOneOutput::from_vc(vc))
             }
 
             _ => unimplemented!(),
