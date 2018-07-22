@@ -221,7 +221,11 @@ impl State {
 
         for (region, group) in groups.iter() {
             if group.len() != (1 << region.dimension()) {
-                let message = format!("lack of members to GVoid: len={}, dim={}", group.len(), region.dimension());
+                let message = format!(
+                    "lack of members to GVoid: len={}, dim={}",
+                    group.len(),
+                    region.dimension()
+                );
                 return Err(Box::new(SimulationError::new(message)));
             }
         }
@@ -1052,29 +1056,26 @@ fn test_update_time_step_gvoid() {
     {
         // 異常系: 数が足りない
         let mut state = original_state.clone();
-        let r = state
-            .update_time_step(&vec![
-                Command::GVoid(NCD::new(0, 0, 1), FCD::new(1, 1, 1)),
-                Command::GVoid(NCD::new(0, 0, 1), FCD::new(-1, 1, 1)),
-                Command::GVoid(NCD::new(0, 0, 1), FCD::new(-1, -1, 1)),
-                Command::Wait,
-            ]);
+        let r = state.update_time_step(&vec![
+            Command::GVoid(NCD::new(0, 0, 1), FCD::new(1, 1, 1)),
+            Command::GVoid(NCD::new(0, 0, 1), FCD::new(-1, 1, 1)),
+            Command::GVoid(NCD::new(0, 0, 1), FCD::new(-1, -1, 1)),
+            Command::Wait,
+        ]);
         assert!(r.is_err());
     }
 
     {
         // 異常系: 頂点がかぶっている
         let mut state = original_state.clone();
-        let r = state
-            .update_time_step(&vec![
-                Command::GVoid(NCD::new(0, 0, 1), FCD::new(1, 1, 1)),
-                Command::GVoid(NCD::new(0, 0, 1), FCD::new(-1, 1, 1)),
-                Command::GVoid(NCD::new(0, 0, 1), FCD::new(-1, -1, 1)),
-                Command::GVoid(NCD::new(0, -1, 1), FCD::new(1, 1, 1)),
-            ]);
+        let r = state.update_time_step(&vec![
+            Command::GVoid(NCD::new(0, 0, 1), FCD::new(1, 1, 1)),
+            Command::GVoid(NCD::new(0, 0, 1), FCD::new(-1, 1, 1)),
+            Command::GVoid(NCD::new(0, 0, 1), FCD::new(-1, -1, 1)),
+            Command::GVoid(NCD::new(0, -1, 1), FCD::new(1, 1, 1)),
+        ]);
         assert!(r.is_err());
     }
-
 }
 
 #[test]
