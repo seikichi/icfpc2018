@@ -595,36 +595,37 @@ pub struct Region(pub Position, pub Position);
 
 impl Region {
     pub fn dimension(&self) -> i32 {
-        (if self.0.x == self.1.x { 0 } else { 1 }) +
-            (if self.0.y == self.1.y { 0 } else { 1 }) +
-            (if self.0.z == self.1.z { 0 } else { 1 })
+        (if self.0.x == self.1.x { 0 } else { 1 })
+            + (if self.0.y == self.1.y { 0 } else { 1 })
+            + (if self.0.z == self.1.z { 0 } else { 1 })
     }
 
     pub fn canonical(&self) -> Region {
         let p1 = Position::new(
             min(self.0.x, self.1.x),
             min(self.0.y, self.1.y),
-            min(self.0.z, self.1.z));
+            min(self.0.z, self.1.z),
+        );
         let p2 = Position::new(
             max(self.0.x, self.1.x),
             max(self.0.y, self.1.y),
-            max(self.0.z, self.1.z));
+            max(self.0.z, self.1.z),
+        );
         Region(p1, p2)
     }
 
     pub fn contains(&self, p: Position) -> bool {
         let c = self.canonical();
-        (c.0.x <= p.x && p.x <= c.1.x) &&
-            (c.0.y <= p.y && p.y <= c.1.y) &&
-            (c.0.z <= p.z && p.z <= c.1.z)
+        (c.0.x <= p.x && p.x <= c.1.x)
+            && (c.0.y <= p.y && p.y <= c.1.y)
+            && (c.0.z <= p.z && p.z <= c.1.z)
     }
 
-    pub fn iter(&self) -> impl Iterator<Item=Position> {
+    pub fn iter(&self) -> impl Iterator<Item = Position> {
         let c = self.canonical();
         (c.0.z..(c.1.z + 1)).flat_map(move |z| {
-            (c.0.y..(c.1.y + 1)).flat_map(move |y| {
-                (c.0.x..(c.1.x + 1)).map(move |x| Position::new(x, y, z))
-            })
+            (c.0.y..(c.1.y + 1))
+                .flat_map(move |y| (c.0.x..(c.1.x + 1)).map(move |x| Position::new(x, y, z)))
         })
     }
 }

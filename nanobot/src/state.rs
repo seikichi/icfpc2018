@@ -394,18 +394,24 @@ impl State {
             Command::GVoid(ncd, fcd) => {
                 let region = Region(c + ncd, c + ncd + fcd);
                 if !self.is_valid_coordinate(&region.0) || !self.is_valid_coordinate(&region.1) {
-                    let message = format!("nanobot is out of matrix: command=GVoid, c={}, ncd={:?}, fcd={:?}", c, ncd, fcd);
+                    let message = format!(
+                        "nanobot is out of matrix: command=GVoid, c={}, ncd={:?}, fcd={:?}",
+                        c, ncd, fcd
+                    );
                     return Err(Box::new(SimulationError::new(message)));
                 }
                 if region.contains(c) {
-                    let message = format!("nanobot is in the region: command=GVoid, c={}, ncd={:?}, fcd={:?}", c, ncd, fcd);
+                    let message = format!(
+                        "nanobot is in the region: command=GVoid, c={}, ncd={:?}, fcd={:?}",
+                        c, ncd, fcd
+                    );
                     return Err(Box::new(SimulationError::new(message)));
                 }
 
                 if region != region.canonical() {
                     // canonical な region を持つ bot が代表してコマンドを実行するので
                     // それ以外の GVoid はエラーチェックのみ
-                    return Ok(UpdateOneOutput::from_single_volatile_coordinate(c))
+                    return Ok(UpdateOneOutput::from_single_volatile_coordinate(c));
                 }
 
                 // TODO: It is also an error if boti.pos + ndi = botj.pos + ndj (for i ≠ j)
@@ -568,7 +574,9 @@ fn test_smove_command() {
         assert_eq!(state.energy, 6);
         assert_eq!(
             vc,
-            Region(Position::new(1, 0, 0), Position::new(1, 2, 0)).iter().collect()
+            Region(Position::new(1, 0, 0), Position::new(1, 2, 0))
+                .iter()
+                .collect()
         );
         state
             .update_one(0, &Command::SMove(LLCD::new(0, 0, 1)))
@@ -864,7 +872,7 @@ fn test_gvoid_commmand() {
         for y in 0..9 {
             for z in 0..10 {
                 for x in 1..10 {
-                    state.bots[0].pos = Position::new(x, y+1, z);
+                    state.bots[0].pos = Position::new(x, y + 1, z);
                     let command = Command::Fill(NCD::new(0, -1, 0));
                     state.update_one(0, &command);
                 }
