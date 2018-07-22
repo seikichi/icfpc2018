@@ -74,7 +74,7 @@ fn reassemble(args: &Vec<String>) {
     let mut f = BufReader::new(f);
     let target = Model::new(&mut f).expect("failed to open target model");
 
-    let trace_output_path = Path::new(&args[3]);
+    let trace_output_path = Path::new(&args[4]);
     let config = Config::new();
     let name = env::var("GOLD_AI").expect("failed to get AI from ENV");
     let ai = build_reassembler(&name, &config);

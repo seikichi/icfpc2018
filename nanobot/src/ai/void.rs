@@ -1,13 +1,15 @@
-use ai::DisassembleAI;
 use ai::utils::*;
+use ai::DisassembleAI;
 use common::*;
 use model::*;
-use std::cmp::{max, min};
+use std::cmp::min;
 
 pub struct VoidAI {}
 
 impl VoidAI {
-    pub fn new() -> Self { VoidAI {} }
+    pub fn new() -> Self {
+        VoidAI {}
+    }
 }
 
 impl DisassembleAI for VoidAI {
@@ -22,7 +24,7 @@ impl DisassembleAI for VoidAI {
         let z_size = (bounding.max_z - bounding.min_z + 1) as usize;
 
         // TODO FIX ME;
-        let xsplit = min(x_size, 4);
+        let xsplit = min(x_size, 8);
         let zsplit = min(z_size, 5);
 
         let mut commands = vec![];
@@ -143,7 +145,6 @@ fn generate_region_commands(model: &Model, initial: Position, size: Position) ->
     commands.extend(move_straight_z(initial.z - z));
     commands
 }
-
 
 #[test]
 fn test_generate_region_with_3x3x3() {

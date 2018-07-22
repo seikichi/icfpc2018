@@ -3,11 +3,10 @@ use super::model::*;
 
 pub mod builder;
 pub mod config;
-pub mod void;
 pub mod grid_fission;
 pub mod naive_reassemble;
-pub mod simple;
 pub mod utils;
+pub mod void;
 
 pub trait AssembleAI {
     fn assemble(&self, model: &Model) -> Vec<Command>;

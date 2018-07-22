@@ -1,11 +1,9 @@
 use ai::config::Config;
 use ai::utils::*;
 use ai::AssembleAI;
-use ai::utils::*;
 use common::*;
 use model::*;
 use std::cmp::min;
-use std::iter::repeat;
 
 pub struct GridFissionAI {}
 
@@ -27,7 +25,7 @@ impl AssembleAI for GridFissionAI {
         let z_size = (bounding.max_z - bounding.min_z + 1) as usize;
 
         // TODO FIX ME;
-        let xsplit = min(x_size, 4);
+        let xsplit = min(x_size, 8);
         let zsplit = min(z_size, 5);
 
         let mut commands = vec![];
