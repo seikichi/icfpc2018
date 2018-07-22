@@ -102,9 +102,11 @@ fn couple_volatile_coordinates(p1: Position, p2: Position) -> VolatileCoordinate
 }
 
 impl State {
-    pub fn update_time_step(&mut self, commands: &Vec<Command>) -> Result<(), Box<Error>> {
+    pub fn update_time_step(&mut self, commands: &[Command]) -> Result<(), Box<Error>> {
         assert_eq!(commands.len(), self.bots.len());
+
         let r = self.matrix.len();
+
         self.energy += (r * r * r) as i64 * match self.harmonics {
             Harmonics::Low => 3,
             Harmonics::High => 30,
@@ -132,6 +134,21 @@ impl State {
             deleted_bot_bids.extend(output.deleted_bot_bids)
         }
 
+        self.verify_fusion_command(commands)?;
+
+        self.bots.retain(|bot| !deleted_bot_bids.contains(&bot.bid));
+        self.bots.extend(added_bots);
+        self.bots.sort();
+
+        if self.harmonics == Harmonics::Low && self.does_floating_voxel_exist() {
+            let message = format!("floating full voxel exists when harmonics is low");
+            return Err(Box::new(SimulationError::new(message)));
+        }
+
+        Ok(())
+    }
+
+    fn verify_fusion_command(&self, commands: &[Command]) -> Result<(), Box<Error>> {
         let mut fusionps = HashMap::<Position, Position>::new();
         for (i, c) in commands.iter().enumerate() {
             if let Command::FusionP(ncd) = c {
@@ -139,6 +156,7 @@ impl State {
                 fusionps.insert(self.bots[i].pos, secondary_c);
             }
         }
+
         let mut fusions_cnt = 0;
         for (i, c) in commands.iter().enumerate() {
             if let Command::FusionS(ncd) = c {
@@ -156,21 +174,13 @@ impl State {
                 }
             }
         }
+
         if fusionps.len() != fusions_cnt {
             let message = format!(
                 "FusionP count is not equal FusionS count : FusionP count={} FusionS count={}",
                 fusionps.len(),
                 fusions_cnt
             );
-            return Err(Box::new(SimulationError::new(message)));
-        }
-
-        self.bots.retain(|bot| !deleted_bot_bids.contains(&bot.bid));
-        self.bots.extend(added_bots);
-        self.bots.sort();
-
-        if self.harmonics == Harmonics::Low && self.does_floating_voxel_exist() {
-            let message = format!("floating full voxel exists when harmonics is low");
             return Err(Box::new(SimulationError::new(message)));
         }
 
@@ -889,6 +899,7 @@ fn test_gvoid_commmand() {
         let gvoid = Command::GVoid(NCD::new(1, 0, 0), FCD::new(4, 5, 6));
         let vc = state.update_one(0, &gvoid).unwrap().vc;
 
+        // GVoid で消した範囲が Void になっていることを verify
         let region = Region(Position::new(1, 0, 0), Position::new(5, 5, 6));
         for p in region.iter() {
             assert_eq!(state.voxel_at(p), Voxel::Void);
