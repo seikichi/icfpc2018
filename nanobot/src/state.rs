@@ -115,9 +115,11 @@ fn couple_volatile_coordinates(p1: Position, p2: Position) -> VolatileCoordinate
 }
 
 impl State {
-    pub fn update_time_step(&mut self, commands: &Vec<Command>) -> Result<(), Box<Error>> {
+    pub fn update_time_step(&mut self, commands: &[Command]) -> Result<(), Box<Error>> {
         assert_eq!(commands.len(), self.bots.len());
+
         let r = self.matrix.len();
+
         self.energy += (r * r * r) as i64 * match self.harmonics {
             Harmonics::Low => 3,
             Harmonics::High => 30,
@@ -145,6 +147,22 @@ impl State {
             deleted_bot_bids.extend(output.deleted_bot_bids)
         }
 
+        self.verify_fusion_commands(commands)?;
+        self.verify_gvoid_commands(commands)?;
+
+        self.bots.retain(|bot| !deleted_bot_bids.contains(&bot.bid));
+        self.bots.extend(added_bots);
+        self.bots.sort();
+
+        if self.harmonics == Harmonics::Low && self.does_floating_voxel_exist() {
+            let message = format!("floating full voxel exists when harmonics is low");
+            return Err(Box::new(SimulationError::new(message)));
+        }
+
+        Ok(())
+    }
+
+    fn verify_fusion_commands(&self, commands: &[Command]) -> Result<(), Box<Error>> {
         let mut fusionps = HashMap::<Position, Position>::new();
         for (i, c) in commands.iter().enumerate() {
             if let Command::FusionP(ncd) = c {
@@ -152,6 +170,7 @@ impl State {
                 fusionps.insert(self.bots[i].pos, secondary_c);
             }
         }
+
         let mut fusions_cnt = 0;
         for (i, c) in commands.iter().enumerate() {
             if let Command::FusionS(ncd) = c {
@@ -169,6 +188,7 @@ impl State {
                 }
             }
         }
+
         if fusionps.len() != fusions_cnt {
             let message = format!(
                 "FusionP count is not equal FusionS count : FusionP count={} FusionS count={}",
@@ -178,13 +198,32 @@ impl State {
             return Err(Box::new(SimulationError::new(message)));
         }
 
-        self.bots.retain(|bot| !deleted_bot_bids.contains(&bot.bid));
-        self.bots.extend(added_bots);
-        self.bots.sort();
+        Ok(())
+    }
 
-        if self.harmonics == Harmonics::Low && self.does_floating_voxel_exist() {
-            let message = format!("floating full voxel exists when harmonics is low");
-            return Err(Box::new(SimulationError::new(message)));
+    fn verify_gvoid_commands(&self, commands: &[Command]) -> Result<(), Box<Error>> {
+        let mut groups = HashMap::new();
+
+        for (i, command) in commands.iter().enumerate() {
+            if let Command::GVoid(ncd, fcd) = command {
+                let c = self.bots[i].pos;
+                let region = Region(c + ncd, c + ncd + fcd).canonical();
+
+                //println!("c={}, region={:?}", c, region);
+
+                let positions = groups.entry(region).or_insert_with(|| HashSet::new());
+                if !positions.insert(c + ncd) {
+                    let message = format!("duplicate vertex in GVoid: {}", c + ncd);
+                    return Err(Box::new(SimulationError::new(message)));
+                }
+            }
+        }
+
+        for (region, group) in groups.iter() {
+            if group.len() != (1 << region.dimension()) {
+                let message = format!("lack of members to GVoid: len={}, dim={}", group.len(), region.dimension());
+                return Err(Box::new(SimulationError::new(message)));
+            }
         }
 
         Ok(())
@@ -426,8 +465,6 @@ impl State {
                     // それ以外の GVoid はエラーチェックのみ
                     return Ok(UpdateOneOutput::from_single_volatile_coordinate(c));
                 }
-
-                // TODO: It is also an error if boti.pos + ndi = botj.pos + ndj (for i ≠ j)
 
                 for p in region.iter() {
                     match self.voxel_at(p) {
@@ -887,7 +924,7 @@ fn test_gvoid_commmand() {
                 for x in 1..10 {
                     state.bots[0].pos = Position::new(x, y + 1, z);
                     let command = Command::Fill(NCD::new(0, -1, 0));
-                    state.update_one(0, &command);
+                    state.update_one(0, &command).unwrap();
                 }
             }
         }
@@ -902,6 +939,7 @@ fn test_gvoid_commmand() {
         let gvoid = Command::GVoid(NCD::new(1, 0, 0), FCD::new(4, 5, 6));
         let vc = state.update_one(0, &gvoid).unwrap().vc;
 
+        // GVoid で消した範囲が Void になっていることを verify
         let region = Region(Position::new(1, 0, 0), Position::new(5, 5, 6));
         for p in region.iter() {
             assert_eq!(state.voxel_at(p), Voxel::Void);
@@ -950,7 +988,10 @@ fn test_update_time_step() {
         expected_energy += 3 * 3 * 3 * 30 + 20;
         assert_eq!(state.energy, expected_energy);
     }
+}
 
+#[test]
+fn test_update_time_step_bot_order() {
     {
         let mut state = State::initial(3);
         state
@@ -968,6 +1009,72 @@ fn test_update_time_step() {
             vec![Bid(1), Bid(2), Bid(3), Bid(8)]
         )
     }
+}
+
+#[test]
+fn test_update_time_step_gvoid() {
+    let original_state = {
+        let mut state = State::initial(3);
+        state
+            .update_time_step(&vec![Command::Fission(NCD::new(1, 0, 0), 4)])
+            .unwrap();
+        state
+            .update_time_step(&vec![
+                Command::Fission(NCD::new(0, 1, 0), 1),
+                Command::Fission(NCD::new(0, 1, 0), 1),
+            ])
+            .unwrap();
+
+        // for bot in state.bots.iter() {
+        //     println!("{:?}: {}", bot.bid, bot.pos);
+        // }
+        // -> Bid(1): (0, 0, 0)
+        //    Bid(2): (1, 0, 0)
+        //    Bid(3): (1, 1, 0)
+        //    Bid(7): (0, 1, 0)
+
+        state
+    };
+
+    {
+        // 正常系
+        let mut state = original_state.clone();
+        state
+            .update_time_step(&vec![
+                Command::GVoid(NCD::new(0, 0, 1), FCD::new(1, 1, 0)),
+                Command::GVoid(NCD::new(0, 0, 1), FCD::new(-1, 1, 0)),
+                Command::GVoid(NCD::new(0, 0, 1), FCD::new(-1, -1, 0)),
+                Command::GVoid(NCD::new(0, 0, 1), FCD::new(1, -1, 0)),
+            ])
+            .unwrap();
+    }
+
+    {
+        // 異常系: 数が足りない
+        let mut state = original_state.clone();
+        let r = state
+            .update_time_step(&vec![
+                Command::GVoid(NCD::new(0, 0, 1), FCD::new(1, 1, 1)),
+                Command::GVoid(NCD::new(0, 0, 1), FCD::new(-1, 1, 1)),
+                Command::GVoid(NCD::new(0, 0, 1), FCD::new(-1, -1, 1)),
+                Command::Wait,
+            ]);
+        assert!(r.is_err());
+    }
+
+    {
+        // 異常系: 頂点がかぶっている
+        let mut state = original_state.clone();
+        let r = state
+            .update_time_step(&vec![
+                Command::GVoid(NCD::new(0, 0, 1), FCD::new(1, 1, 1)),
+                Command::GVoid(NCD::new(0, 0, 1), FCD::new(-1, 1, 1)),
+                Command::GVoid(NCD::new(0, 0, 1), FCD::new(-1, -1, 1)),
+                Command::GVoid(NCD::new(0, -1, 1), FCD::new(1, 1, 1)),
+            ]);
+        assert!(r.is_err());
+    }
+
 }
 
 #[test]
