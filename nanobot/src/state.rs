@@ -49,6 +49,10 @@ impl State {
         state.connectivity_is_dirty = true;
         state
     }
+    pub fn same_model(&self, model: &Model) -> bool {
+        assert!(self.matrix.len() == model.matrix.len());
+        self.matrix == model.matrix
+    }
     pub fn get_energy(&self) -> i64 {
         self.energy
     }
