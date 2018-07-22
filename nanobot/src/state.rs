@@ -494,7 +494,9 @@ fn test_halt_command() {
 
     {
         let mut state = State::initial(3);
-        state.update_time_step(&vec![Command::Fission(NCD::new(1, 0, 0), 0)]).unwrap();
+        state
+            .update_time_step(&vec![Command::Fission(NCD::new(1, 0, 0), 0)])
+            .unwrap();
 
         let r = state.update_one(0, &Command::Halt);
         assert!(r.is_err());
@@ -550,7 +552,9 @@ fn test_smove_command() {
     }
     {
         let mut state = State::initial(3);
-        state.update_one(0, &Command::Fill(NCD::new(1, 0, 0))).unwrap();
+        state
+            .update_one(0, &Command::Fill(NCD::new(1, 0, 0)))
+            .unwrap();
         let r = state.update_one(0, &Command::SMove(LLCD::new(1, 0, 0)));
         assert!(r.is_err());
     }
@@ -860,7 +864,9 @@ fn test_update_time_step() {
 fn test_interfere_check() {
     {
         let mut state = State::initial(3);
-        state.update_time_step(&vec![Command::Fission(NCD::new(1, 0, 0), 0)]).unwrap();
+        state
+            .update_time_step(&vec![Command::Fission(NCD::new(1, 0, 0), 0)])
+            .unwrap();
         let commands = vec![Command::Wait, Command::SMove(LLCD::new(-1, 0, 0))];
         let r = state.update_time_step(&commands);
         assert!(r.is_err());
@@ -875,7 +881,9 @@ fn test_interfere_check() {
         // 131
         // 12x
         let mut state = State::initial(3);
-        state.update_time_step(&vec![Command::Fission(NCD::new(1, 0, 0), 0)]).unwrap();
+        state
+            .update_time_step(&vec![Command::Fission(NCD::new(1, 0, 0), 0)])
+            .unwrap();
         let commands = vec![
             Command::LMove(SLCD::new(0, 1, 0), SLCD::new(2, 0, 0)),
             Command::SMove(LLCD::new(0, 2, 0)),
@@ -911,31 +919,47 @@ fn test_grounded_check() {
 
     {
         let mut state = State::initial(3);
-        state.update_time_step(&vec![Command::Fill(NCD::new(1, 0, 0))]).unwrap();
+        state
+            .update_time_step(&vec![Command::Fill(NCD::new(1, 0, 0))])
+            .unwrap();
         let r = state.update_time_step(&vec![Command::Fill(NCD::new(0, 1, 1))]);
         assert!(r.is_err());
     }
 
     {
         let mut state = State::initial(3);
-        state.update_time_step(&vec![Command::Fill(NCD::new(1, 0, 0))]).unwrap();
-        state.update_time_step(&vec![Command::Fill(NCD::new(1, 1, 0))]).unwrap();
+        state
+            .update_time_step(&vec![Command::Fill(NCD::new(1, 0, 0))])
+            .unwrap();
+        state
+            .update_time_step(&vec![Command::Fill(NCD::new(1, 1, 0))])
+            .unwrap();
         let r = state.update_time_step(&vec![Command::Void(NCD::new(1, 0, 0))]);
         assert!(r.is_err());
     }
 
     {
         let mut state = State::initial(3);
-        state.update_time_step(&vec![Command::Fill(NCD::new(1, 0, 0))]).unwrap();
-        state.update_time_step(&vec![Command::Fill(NCD::new(1, 1, 0))]).unwrap();
+        state
+            .update_time_step(&vec![Command::Fill(NCD::new(1, 0, 0))])
+            .unwrap();
+        state
+            .update_time_step(&vec![Command::Fill(NCD::new(1, 1, 0))])
+            .unwrap();
         let r = state.update_time_step(&vec![Command::Void(NCD::new(1, 0, 0))]);
         assert!(r.is_err());
     }
 
     {
         let mut state = State::initial(3);
-        state.update_time_step(&vec![Command::Fill(NCD::new(1, 0, 0))]).unwrap();
-        state.update_time_step(&vec![Command::Fill(NCD::new(1, 1, 0))]).unwrap();
-        state.update_time_step(&vec![Command::Void(NCD::new(1, 1, 0))]).unwrap();
+        state
+            .update_time_step(&vec![Command::Fill(NCD::new(1, 0, 0))])
+            .unwrap();
+        state
+            .update_time_step(&vec![Command::Fill(NCD::new(1, 1, 0))])
+            .unwrap();
+        state
+            .update_time_step(&vec![Command::Void(NCD::new(1, 1, 0))])
+            .unwrap();
     }
 }
