@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use common::*;
 use std::error::*;
 use std::io::BufRead;
