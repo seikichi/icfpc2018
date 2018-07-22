@@ -304,10 +304,7 @@ impl State {
                     Voxel::Full => self.energy += 6,
                 }
 
-                let mut vc = VolatileCoordinates::new();
-                vc.insert(c);
-                vc.insert(new_c);
-
+                let vc = couple_volatile_coordinates(c, new_c);
                 Ok(UpdateOneOutput::from_vc(vc))
             }
 
@@ -344,6 +341,30 @@ impl State {
                     added_bots: vec![new_bot],
                     deleted_bot_bids: vec![],
                 })
+            }
+
+            Command::Void(ncd) => {
+                let new_c = c + ncd;
+
+                if !self.is_valid_coordinate(&new_c) {
+                    let message = format!("nanobot is out of matrix: command=Void, c={}", new_c);
+                    return Err(Box::new(SimulationError::new(message)));
+                }
+
+                match self.voxel_at(new_c) {
+                    Voxel::Full => {
+                        self.set_voxel_at(new_c, Voxel::Void);
+                        self.energy -= 12;
+                        self.full_voxel_count -= 1;
+                        self.connectivity_is_dirty = true;
+                    }
+                    Voxel::Void => {
+                        self.energy += 3;
+                    }
+                }
+
+                let vc = couple_volatile_coordinates(c, new_c);
+                Ok(UpdateOneOutput::from_vc(vc))
             }
 
             Command::FusionP(ncd) => {
@@ -445,6 +466,8 @@ impl State {
     }
 
     fn is_grounded(&mut self, p: &Position) -> bool {
+        assert!(!self.connectivity_is_dirty);
+
         let r = self.matrix.len();
         self.connectivity.find_set(p.index(r), r * r * r)
     }
