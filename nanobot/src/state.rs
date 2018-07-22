@@ -20,6 +20,8 @@ pub struct State {
     // r*r*r 番目の要素は床を表す仮想の要素。
     connectivity: UnionFind,
     connectivity_is_dirty: bool,
+    // dirtyフラグがたっているが、groundedであることは確実であるというフラグ
+    must_be_grounded_on_dirty: bool,
 
     full_voxel_count: i32,
 }
@@ -36,6 +38,7 @@ impl State {
             connectivity: UnionFind::new(r * r * r + 1),
             connectivity_is_dirty: false,
             full_voxel_count: 0,
+            must_be_grounded_on_dirty: true,
         }
     }
     pub fn initial_with_model(model: &Model) -> State {
@@ -280,9 +283,17 @@ impl State {
 
     fn does_floating_voxel_exist(&mut self) -> bool {
         if self.connectivity_is_dirty {
+            if self.must_be_grounded_on_dirty {
+                return false;
+            }
+
             self.reculculate_connectivity()
         }
 
+        self.does_floating_voxel_exist_with_cache()
+    }
+
+    fn does_floating_voxel_exist_with_cache(&mut self) -> bool {
         let r = self.matrix.len();
         self.connectivity.size(r * r * r) - 1 != self.full_voxel_count as usize
     }
@@ -313,6 +324,7 @@ impl State {
         }
 
         self.connectivity_is_dirty = false;
+        self.must_be_grounded_on_dirty = !self.does_floating_voxel_exist_with_cache();
     }
 
     pub fn update_one(
@@ -421,17 +433,7 @@ impl State {
                     return Err(Box::new(SimulationError::new(message)));
                 }
 
-                match self.voxel_at(new_c) {
-                    Voxel::Full => {
-                        self.set_voxel_at(new_c, Voxel::Void);
-                        self.energy -= 12;
-                        self.full_voxel_count -= 1;
-                        self.connectivity_is_dirty = true;
-                    }
-                    Voxel::Void => {
-                        self.energy += 3;
-                    }
-                }
+                self.erase_voxel(new_c);
 
                 let vc = couple_volatile_coordinates(c, new_c);
                 Ok(UpdateOneOutput::from_vc(vc))
@@ -487,6 +489,8 @@ impl State {
                     // それ以外の GVoid はエラーチェックのみ
                     return Ok(UpdateOneOutput::from_single_volatile_coordinate(c));
                 }
+
+                self.must_be_grounded_on_dirty = false;
 
                 for p in region.iter() {
                     match self.voxel_at(p) {
@@ -591,6 +595,7 @@ impl State {
 
     fn fill_voxel(&mut self, c: Position) {
         let r = self.matrix.len();
+        self.must_be_grounded_on_dirty = false;
 
         match self.voxel_at(c) {
             Voxel::Void => {
@@ -612,17 +617,52 @@ impl State {
         }
     }
 
+    fn erase_voxel(&mut self, c: Position) {
+        match self.voxel_at(c) {
+            Voxel::Full => {
+                self.set_voxel_at(c, Voxel::Void);
+                self.energy -= 12;
+                self.full_voxel_count -= 1;
+
+                self.connectivity_is_dirty = true;
+                if !self.can_omit_connectivity_recalculation(c) {
+                    self.must_be_grounded_on_dirty = false;
+                }
+            }
+            Voxel::Void => {
+                self.energy += 3;
+            }
+        }
+    }
+
+    fn can_omit_connectivity_recalculation(&mut self, c: Position) -> bool {
+        let r = self.matrix.len() as i32;
+
+        if !self.must_be_grounded_on_dirty {
+            return false;
+        }
+
+        if c.y == 0 {
+            self.voxel_at(c + &NCD::new(0, 1, 0)) == Voxel::Void
+        } else {
+            (c.y == r - 1 || self.voxel_at(c + &NCD::new(0, 1, 0)) == Voxel::Void) &&
+                self.voxel_at(c + &NCD::new(0, -1, 0)) == Voxel::Full &&
+                (c.x == 0 || self.voxel_at(c + &NCD::new(-1, -1, 0)) == Voxel::Full) &&
+                (c.z == 0 || self.voxel_at(c + &NCD::new(0, -1, -1)) == Voxel::Full) &&
+                (c.x == r - 1 || self.voxel_at(c + &NCD::new(1, -1, 0)) == Voxel::Full) &&
+                (c.z == r - 1 || self.voxel_at(c + &NCD::new(0, -1, 1)) == Voxel::Full)
+        }
+    }
+
     fn is_valid_coordinate(&self, p: &Position) -> bool {
-        let rx = self.matrix[0][0].len() as i32;
-        let ry = self.matrix[0].len() as i32;
-        let rz = self.matrix.len() as i32;
-        if p.x < 0 || p.x >= rx {
+        let r = self.matrix.len() as i32;
+        if p.x < 0 || p.x >= r {
             return false;
         }
-        if p.y < 0 || p.y >= ry {
+        if p.y < 0 || p.y >= r {
             return false;
         }
-        if p.z < 0 || p.z >= rz {
+        if p.z < 0 || p.z >= r {
             return false;
         }
         true
