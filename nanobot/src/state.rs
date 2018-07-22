@@ -201,7 +201,10 @@ impl State {
                             self.connectivity.union_set(p.index(r), r * r * r);
                         }
                         for pp in region(p + &Position::new(-1, -1, -1), p) {
-                            if pp != p && self.is_valid_coordinate(&pp) && self.voxel_at(pp) == Voxel::Full {
+                            if pp != p
+                                && self.is_valid_coordinate(&pp)
+                                && self.voxel_at(pp) == Voxel::Full
+                            {
                                 self.connectivity.union_set(p.index(r), pp.index(r));
                             }
                         }
@@ -652,10 +655,15 @@ fn test_void_command() {
     {
         let mut state = State::initial(3);
 
-        state.update_one(0, &Command::Fill(NCD::new(1, 0, 0))).unwrap();
+        state
+            .update_one(0, &Command::Fill(NCD::new(1, 0, 0)))
+            .unwrap();
         assert_eq!(state.energy, 12);
 
-        let vc = state.update_one(0, &Command::Void(NCD::new(1, 0, 0))).unwrap().vc;
+        let vc = state
+            .update_one(0, &Command::Void(NCD::new(1, 0, 0)))
+            .unwrap()
+            .vc;
         assert_eq!(state.voxel_at(Position::new(1, 0, 0)), Voxel::Void);
         assert_eq!(state.energy, 0);
         assert!(state.connectivity_is_dirty);
@@ -668,7 +676,10 @@ fn test_void_command() {
     {
         let mut state = State::initial(3);
 
-        let vc = state.update_one(0, &Command::Void(NCD::new(1, 0, 0))).unwrap().vc;
+        let vc = state
+            .update_one(0, &Command::Void(NCD::new(1, 0, 0)))
+            .unwrap()
+            .vc;
         assert_eq!(state.energy, 3);
         assert_eq!(
             vc,
