@@ -149,6 +149,7 @@ impl State {
 
         self.verify_fusion_commands(commands)?;
         self.verify_gvoid_commands(commands)?;
+        self.verify_gfill_commands(commands)?;
 
         self.bots.retain(|bot| !deleted_bot_bids.contains(&bot.bid));
         self.bots.extend(added_bots);
@@ -223,6 +224,38 @@ impl State {
             if group.len() != (1 << region.dimension()) {
                 let message = format!(
                     "lack of members to GVoid: len={}, dim={}",
+                    group.len(),
+                    region.dimension()
+                );
+                return Err(Box::new(SimulationError::new(message)));
+            }
+        }
+
+        Ok(())
+    }
+
+    fn verify_gfill_commands(&self, commands: &[Command]) -> Result<(), Box<Error>> {
+        let mut groups = HashMap::new();
+
+        for (i, command) in commands.iter().enumerate() {
+            if let Command::GFill(ncd, fcd) = command {
+                let c = self.bots[i].pos;
+                let region = Region(c + ncd, c + ncd + fcd).canonical();
+
+                //println!("c={}, region={:?}", c, region);
+
+                let positions = groups.entry(region).or_insert_with(|| HashSet::new());
+                if !positions.insert(c + ncd) {
+                    let message = format!("duplicate vertex in GFill: {}", c + ncd);
+                    return Err(Box::new(SimulationError::new(message)));
+                }
+            }
+        }
+
+        for (region, group) in groups.iter() {
+            if group.len() != (1 << region.dimension()) {
+                let message = format!(
+                    "lack of members to GFill: len={}, dim={}",
                     group.len(),
                     region.dimension()
                 );
@@ -335,24 +368,7 @@ impl State {
                     return Err(Box::new(SimulationError::new(message)));
                 }
 
-                match self.voxel_at(new_c) {
-                    Voxel::Void => {
-                        self.set_voxel_at(new_c, Voxel::Full);
-                        self.energy += 12;
-
-                        for p in adjacent(new_c) {
-                            if self.is_valid_coordinate(&p) && self.voxel_at(p) == Voxel::Full {
-                                self.connectivity.union_set(new_c.index(r), p.index(r));
-                            }
-                        }
-
-                        if new_c.y == 0 {
-                            self.connectivity.union_set(new_c.index(r), r * r * r);
-                        }
-                        self.full_voxel_count += 1;
-                    }
-                    Voxel::Full => self.energy += 6,
-                }
+                self.fill_voxel(new_c);
 
                 let vc = couple_volatile_coordinates(c, new_c);
                 Ok(UpdateOneOutput::from_vc(vc))
@@ -491,7 +507,39 @@ impl State {
                 Ok(UpdateOneOutput::from_vc(vc))
             }
 
-            _ => unimplemented!(),
+            Command::GFill(ncd, fcd) => {
+                let region = Region(c + ncd, c + ncd + fcd);
+                if !self.is_valid_coordinate(&region.0) || !self.is_valid_coordinate(&region.1) {
+                    let message = format!(
+                        "nanobot is out of matrix: command=GFill, c={}, ncd={:?}, fcd={:?}",
+                        c, ncd, fcd
+                    );
+                    return Err(Box::new(SimulationError::new(message)));
+                }
+                if region.contains(c) {
+                    let message = format!(
+                        "nanobot is in the region: command=GFill, c={}, ncd={:?}, fcd={:?}",
+                        c, ncd, fcd
+                    );
+                    return Err(Box::new(SimulationError::new(message)));
+                }
+
+                if region != region.canonical() {
+                    // canonical な region を持つ bot が代表してコマンドを実行するので
+                    // それ以外の GFill はエラーチェックのみ
+                    return Ok(UpdateOneOutput::from_single_volatile_coordinate(c));
+                }
+
+                for p in region.iter() {
+                    self.fill_voxel(p);
+                }
+
+                let mut vc = VolatileCoordinates::new();
+                vc.insert(c);
+                vc.extend(region.iter());
+
+                Ok(UpdateOneOutput::from_vc(vc))
+            }
         }
     }
 
@@ -537,6 +585,29 @@ impl State {
         self.bots[nanobot_index].pos = new_c;
         self.energy += 2 * diff.manhattan_length() as i64;
         Ok(Region(c, new_c).iter().collect())
+    }
+
+    fn fill_voxel(&mut self, c: Position) {
+        let r = self.matrix.len();
+
+        match self.voxel_at(c) {
+            Voxel::Void => {
+                self.set_voxel_at(c, Voxel::Full);
+                self.energy += 12;
+
+                for p in adjacent(c) {
+                    if self.is_valid_coordinate(&p) && self.voxel_at(p) == Voxel::Full {
+                        self.connectivity.union_set(c.index(r), p.index(r));
+                    }
+                }
+
+                if c.y == 0 {
+                    self.connectivity.union_set(c.index(r), r * r * r);
+                }
+                self.full_voxel_count += 1;
+            }
+            Voxel::Full => self.energy += 6,
+        }
     }
 
     fn is_valid_coordinate(&self, p: &Position) -> bool {
@@ -974,6 +1045,44 @@ fn test_gvoid_commmand() {
 }
 
 #[test]
+fn test_gfill_commmand() {
+    {
+        let mut state = State::initial(10);
+
+        let gfill = Command::GFill(NCD::new(1, 0, 0), FCD::new(4, 5, 6));
+        let vc = state.update_one(0, &gfill).unwrap().vc;
+
+        // GFill でつくった範囲が Full になっていることを verify
+        let region = Region(Position::new(1, 0, 0), Position::new(5, 5, 6));
+        for p in region.iter() {
+            assert_eq!(state.voxel_at(p), Voxel::Full);
+        }
+
+        // 範囲外の点を代表していくつか verify しておく
+        assert_eq!(state.voxel_at(Position::new(6, 1, 1)), Voxel::Void);
+        assert_eq!(state.voxel_at(Position::new(1, 6, 1)), Voxel::Void);
+        assert_eq!(state.voxel_at(Position::new(1, 1, 7)), Voxel::Void);
+
+        // verify energy
+        assert_eq!(state.energy, 12 * (4 + 1) * (5 + 1) * (6 + 1));
+
+        // verify vc
+        let mut expected_vc = VolatileCoordinates::new();
+        expected_vc.insert(Position::zero());
+        expected_vc.extend(region.iter());
+        assert_eq!(vc, expected_vc);
+    }
+
+    {
+        let mut state = State::initial(10);
+
+        let gfill = Command::GFill(NCD::new(1, 0, 0), FCD::new(-1, 0, 0));
+        let r = state.update_one(0, &gfill);
+        assert!(r.is_err());
+    }
+}
+
+#[test]
 fn test_update_time_step() {
     {
         let mut state = State::initial(3);
@@ -1073,6 +1182,69 @@ fn test_update_time_step_gvoid() {
             Command::GVoid(NCD::new(0, 0, 1), FCD::new(-1, 1, 1)),
             Command::GVoid(NCD::new(0, 0, 1), FCD::new(-1, -1, 1)),
             Command::GVoid(NCD::new(0, -1, 1), FCD::new(1, 1, 1)),
+        ]);
+        assert!(r.is_err());
+    }
+}
+
+#[test]
+fn test_update_time_step_gfill() {
+    let original_state = {
+        let mut state = State::initial(3);
+        state
+            .update_time_step(&vec![Command::Fission(NCD::new(1, 0, 0), 4)])
+            .unwrap();
+        state
+            .update_time_step(&vec![
+                Command::Fission(NCD::new(0, 1, 0), 1),
+                Command::Fission(NCD::new(0, 1, 0), 1),
+            ])
+            .unwrap();
+
+        // for bot in state.bots.iter() {
+        //     println!("{:?}: {}", bot.bid, bot.pos);
+        // }
+        // -> Bid(1): (0, 0, 0)
+        //    Bid(2): (1, 0, 0)
+        //    Bid(3): (1, 1, 0)
+        //    Bid(7): (0, 1, 0)
+
+        state
+    };
+
+    {
+        // 正常系
+        let mut state = original_state.clone();
+        state
+            .update_time_step(&vec![
+                Command::GFill(NCD::new(0, 0, 1), FCD::new(1, 1, 0)),
+                Command::GFill(NCD::new(0, 0, 1), FCD::new(-1, 1, 0)),
+                Command::GFill(NCD::new(0, 0, 1), FCD::new(-1, -1, 0)),
+                Command::GFill(NCD::new(0, 0, 1), FCD::new(1, -1, 0)),
+            ])
+            .unwrap();
+    }
+
+    {
+        // 異常系: 数が足りない
+        let mut state = original_state.clone();
+        let r = state.update_time_step(&vec![
+            Command::GFill(NCD::new(0, 0, 1), FCD::new(1, 1, 1)),
+            Command::GFill(NCD::new(0, 0, 1), FCD::new(-1, 1, 1)),
+            Command::GFill(NCD::new(0, 0, 1), FCD::new(-1, -1, 1)),
+            Command::Wait,
+        ]);
+        assert!(r.is_err());
+    }
+
+    {
+        // 異常系: 頂点がかぶっている
+        let mut state = original_state.clone();
+        let r = state.update_time_step(&vec![
+            Command::GFill(NCD::new(0, 0, 1), FCD::new(1, 1, 1)),
+            Command::GFill(NCD::new(0, 0, 1), FCD::new(-1, 1, 1)),
+            Command::GFill(NCD::new(0, 0, 1), FCD::new(-1, -1, 1)),
+            Command::GFill(NCD::new(0, -1, 1), FCD::new(1, 1, 1)),
         ]);
         assert!(r.is_err());
     }
