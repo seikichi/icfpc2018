@@ -15,7 +15,7 @@ impl VoidAI {
 }
 
 impl DisassembleAI for VoidAI {
-    fn disassemble(&self, model: &Model) -> Vec<Command> {
+    fn disassemble(&mut self, model: &Model) -> Vec<Command> {
         let bounding = match calc_bounding_box(model) {
             Some(b) => b,
             None => {

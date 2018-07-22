@@ -5,10 +5,11 @@ use ai::void::VoidAI;
 use ai::AssembleAI;
 use ai::DisassembleAI;
 use ai::ReassembleAI;
+use model::Model;
 
 use std::process;
 
-pub fn build_assembler(name: &String, config: &Config) -> Box<AssembleAI> {
+pub fn build_assembler(name: &String, config: &Config, _target: &Model) -> Box<AssembleAI> {
     match name.as_str() {
         "default" => Box::new(GridFissionAI::new(config)),
         _ => {
@@ -18,7 +19,7 @@ pub fn build_assembler(name: &String, config: &Config) -> Box<AssembleAI> {
     }
 }
 
-pub fn build_disassembler(name: &String, _config: &Config) -> Box<DisassembleAI> {
+pub fn build_disassembler(name: &String, _config: &Config, _source: &Model) -> Box<DisassembleAI> {
     match name.as_str() {
         "default" => Box::new(VoidAI::new()),
         _ => {
@@ -28,9 +29,14 @@ pub fn build_disassembler(name: &String, _config: &Config) -> Box<DisassembleAI>
     }
 }
 
-pub fn build_reassembler(name: &String, config: &Config) -> Box<ReassembleAI> {
+pub fn build_reassembler(
+    name: &String,
+    config: &Config,
+    source: &Model,
+    target: &Model,
+) -> Box<ReassembleAI> {
     match name.as_str() {
-        "default" => Box::new(NaiveReassembleAI::new(config)),
+        "default" => Box::new(NaiveReassembleAI::new(config, source, target)),
         _ => {
             eprintln!("failed to build assembler AI (name = {})", name);
             process::exit(1);

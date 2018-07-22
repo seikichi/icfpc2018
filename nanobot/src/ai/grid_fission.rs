@@ -16,7 +16,7 @@ impl GridFissionAI {
 }
 
 impl AssembleAI for GridFissionAI {
-    fn assemble(&self, model: &Model) -> Vec<Command> {
+    fn assemble(&mut self, model: &Model) -> Vec<Command> {
         let bounding = match calc_bounding_box(model) {
             Some(b) => b,
             None => {

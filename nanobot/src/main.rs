@@ -42,7 +42,7 @@ fn assemble(args: &Vec<String>) {
     let trace_output_path = Path::new(&args[3]);
     let config = Config::new();
     let name = env::var("GOLD_AI").expect("failed to get AI from ENV");
-    let ai = build_assembler(&name, &config);
+    let mut ai = build_assembler(&name, &config, &target);
     let commands = ai.assemble(&target);
     write_trace_file(trace_output_path, &commands).expect("failed to write trace");
 }
@@ -55,7 +55,7 @@ fn disassemble(args: &Vec<String>) {
     let trace_output_path = Path::new(&args[3]);
     let config = Config::new();
     let name = env::var("GOLD_AI").expect("failed to get AI from ENV");
-    let ai = build_disassembler(&name, &config);
+    let mut ai = build_disassembler(&name, &config, &source);
     let commands = ai.disassemble(&source);
     write_trace_file(trace_output_path, &commands).expect("failed to write trace");
 }
@@ -77,7 +77,7 @@ fn reassemble(args: &Vec<String>) {
     let trace_output_path = Path::new(&args[4]);
     let config = Config::new();
     let name = env::var("GOLD_AI").expect("failed to get AI from ENV");
-    let ai = build_reassembler(&name, &config);
+    let mut ai = build_reassembler(&name, &config, &source, &target);
     let commands = ai.reassemble(&source, &target);
     write_trace_file(trace_output_path, &commands).expect("failed to write trace");
 }
