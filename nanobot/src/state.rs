@@ -1,4 +1,5 @@
 use common::*;
+use model::Model;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::error::*;
@@ -27,7 +28,7 @@ impl State {
         let bot = Nanobot {
             bid: Bid(1),
             pos: Position::new(0, 0, 0),
-            seeds: (2..21).map(|bid| Bid(bid)).collect(),
+            seeds: (2..41).map(|bid| Bid(bid)).collect(),
         };
         State {
             energy: 0,
@@ -38,6 +39,18 @@ impl State {
             connectivity_is_dirty: false,
             full_voxel_count: 0,
         }
+    }
+    pub fn initial_with_model(model: &Model) -> State {
+        let r = model.matrix.len();
+        let mut state = State::initial(r);
+        state.matrix = model.matrix.clone();
+        state
+    }
+    pub fn get_energy(&self) -> i64 {
+        self.energy
+    }
+    pub fn get_bot_count(&self) -> usize {
+        self.bots.len()
     }
 }
 
@@ -743,7 +756,7 @@ fn test_fission_command() {
         assert_eq!(state.bots[0].bid, Bid(1));
         assert_eq!(
             state.bots[0].seeds,
-            (4..21).map(|i| Bid(i)).collect::<Vec<Bid>>()
+            (4..41).map(|i| Bid(i)).collect::<Vec<Bid>>()
         );
         assert_eq!(output.vc, expected_vc);
         assert_eq!(output.added_bots.len(), 1);
@@ -758,7 +771,7 @@ fn test_fission_command() {
     }
     {
         let mut state = State::initial(3);
-        let r = state.update_one(0, &Command::Fission(NCD::new(1, 0, 0), 19));
+        let r = state.update_one(0, &Command::Fission(NCD::new(1, 0, 0), 39));
         assert!(r.is_err());
     }
     {
@@ -794,7 +807,7 @@ fn test_fusion_command() {
         assert_eq!(state.bots[0].bid, Bid(1));
         assert_eq!(
             state.bots[0].seeds,
-            (2..21).map(|i| Bid(i)).collect::<Vec<Bid>>()
+            (2..41).map(|i| Bid(i)).collect::<Vec<Bid>>()
         );
         assert_eq!(state.energy, 3 * 3 * 3 * 3 * 2 + 20 + 40);
     }
