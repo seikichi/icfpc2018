@@ -161,6 +161,49 @@ fn ncd_encode_test() {
 }
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug)]
+pub struct FCD {
+    x: i32,
+    y: i32,
+    z: i32,
+}
+
+impl FCD {
+    pub fn new(x: i32, y: i32, z: i32) -> Self {
+        let fcd = FCD { x, y, z };
+        assert!(0 < fcd.chessboard_length() && fcd.chessboard_length() <= 30);
+        fcd
+    }
+    pub fn encode(&self) -> (u8, u8, u8) {
+        (
+            (self.x + 30) as u8,
+            (self.y + 30) as u8,
+            (self.z + 30) as u8,
+        )
+    }
+}
+
+impl CD for FCD {
+    fn x(&self) -> i32 {
+        self.x
+    }
+    fn y(&self) -> i32 {
+        self.y
+    }
+    fn z(&self) -> i32 {
+        self.z
+    }
+}
+
+#[test]
+fn fcd_encode_test() {
+    let fcd = FCD::new(20, 10, -5);
+    let enc = fcd.encode();
+    assert_eq!(enc.0, 50);
+    assert_eq!(enc.1, 40);
+    assert_eq!(enc.2, 25);
+}
+
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug)]
 pub struct SLCD {
     x: i32,
     y: i32,
