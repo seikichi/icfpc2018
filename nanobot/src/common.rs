@@ -373,7 +373,30 @@ impl<'a> Add<&'a CD> for Position {
 }
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug, Hash)]
-pub struct Region(Position, Position);
+pub struct Region(pub Position, pub Position);
+
+impl Region {
+    pub fn canonical(&self) -> Region {
+        let p1 = Position::new(
+            min(self.0.x, self.1.x),
+            min(self.0.y, self.1.y),
+            min(self.0.z, self.1.z));
+        let p2 = Position::new(
+            max(self.0.x, self.1.x),
+            max(self.0.y, self.1.y),
+            max(self.0.z, self.1.z));
+        Region(p1, p2)
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item=Position> {
+        let c = self.canonical();
+        (c.0.z..(c.1.z + 1)).flat_map(move |z| {
+            (c.0.y..(c.1.y + 1)).flat_map(move |y| {
+                (c.0.x..(c.1.x + 1)).map(move |x| Position::new(x, y, z))
+            })
+        })
+    }
+}
 
 impl CD for Position {
     fn x(&self) -> i32 {
@@ -385,14 +408,6 @@ impl CD for Position {
     fn z(&self) -> i32 {
         self.z
     }
-}
-
-pub fn region(p1: Position, p2: Position) -> impl Iterator<Item = Position> {
-    (min(p1.z, p2.z)..max(p1.z, p2.z) + 1).flat_map(move |z| {
-        (min(p1.y, p2.y)..max(p1.y, p2.y) + 1).flat_map(move |y| {
-            (min(p1.x, p2.x)..max(p1.x, p2.x) + 1).map(move |x| Position::new(x, y, z))
-        })
-    })
 }
 
 pub fn adjacent(p: Position) -> Vec<Position> {

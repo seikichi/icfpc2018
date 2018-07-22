@@ -431,7 +431,7 @@ impl State {
             );
             return Err(Box::new(SimulationError::new(message)));
         }
-        for p in region(c, new_c) {
+        for p in Region(c, new_c).iter() {
             if self.matrix[p.z as usize][p.y as usize][p.x as usize] == Voxel::Full {
                 let message = format!("nanobot hits full voxel : command={:?}, c={}", command, p);
                 return Err(Box::new(SimulationError::new(message)));
@@ -440,7 +440,7 @@ impl State {
 
         self.bots[nanobot_index].pos = new_c;
         self.energy += 2 * diff.manhattan_length() as i64;
-        Ok(region(c, new_c).collect())
+        Ok(Region(c, new_c).iter().collect())
     }
 
     fn is_valid_coordinate(&self, p: &Position) -> bool {
@@ -532,7 +532,7 @@ fn test_smove_command() {
         assert_eq!(state.energy, 6);
         assert_eq!(
             vc,
-            region(Position::new(1, 0, 0), Position::new(1, 2, 0)).collect()
+            Region(Position::new(1, 0, 0), Position::new(1, 2, 0)).iter().collect()
         );
         state
             .update_one(0, &Command::SMove(LLCD::new(0, 0, 1)))
