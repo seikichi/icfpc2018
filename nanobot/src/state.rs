@@ -49,9 +49,17 @@ impl State {
         state.connectivity_is_dirty = true;
         state
     }
-    pub fn same_model(&self, model: &Model) -> bool {
+    pub fn end_check(&self, model: &Model) -> Result<(), Box<Error>> {
         assert!(self.matrix.len() == model.matrix.len());
-        self.matrix == model.matrix
+        if self.bots.len() != 0 {
+            let message = format!("Exist active nanobots");
+            return Err(Box::new(SimulationError::new(message)));
+        }
+        if self.matrix != model.matrix {
+            let message = format!("Halted with missing or excess filled coordinates");
+            return Err(Box::new(SimulationError::new(message)));
+        }
+        Ok(())
     }
     pub fn get_energy(&self) -> i64 {
         self.energy
@@ -124,6 +132,7 @@ fn couple_volatile_coordinates(p1: Position, p2: Position) -> VolatileCoordinate
 impl State {
     pub fn update_time_step(&mut self, commands: &[Command]) -> Result<(), Box<Error>> {
         assert_eq!(commands.len(), self.bots.len());
+        assert!(self.bots.len() > 0);
 
         let r = self.matrix.len();
 
@@ -1357,5 +1366,30 @@ fn test_grounded_check() {
         state
             .update_time_step(&vec![Command::Void(NCD::new(1, 1, 0))])
             .unwrap();
+    }
+}
+
+#[test]
+fn end_check_test() {
+    {
+        let mut state = State::initial(3);
+        let model = Model::initial(3);
+        state.update_time_step(&vec![Command::Halt]).unwrap();
+        let r = state.end_check(&model);
+        assert!(r.is_ok());
+    }
+    {
+        let state = State::initial(3);
+        let model = Model::initial(3);
+        let r = state.end_check(&model);
+        assert!(r.is_err());
+    }
+    {
+        let mut state = State::initial(3);
+        let mut model = Model::initial(3);
+        model.matrix[1][0][1] = Voxel::Full;
+        state.update_time_step(&vec![Command::Halt]).unwrap();
+        let r = state.end_check(&model);
+        assert!(r.is_err());
     }
 }

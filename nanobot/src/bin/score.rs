@@ -1,9 +1,6 @@
 extern crate getopts;
 extern crate nanobot_lib;
 
-// mod common;
-// mod model;
-// mod state;
 use getopts::Options;
 use nanobot_lib::common::read_trace_file;
 use nanobot_lib::model::Model;
@@ -90,10 +87,12 @@ fn main() {
         }
         offset += bot_cnt;
     }
-    if !state.same_model(&target_model) {
-        println!("Failure::");
-        println!("Halted with missing or excess filled coordinates");
-        panic!("Halted with missing or excess filled coordinates")
+    match state.end_check(&target_model) {
+        Ok(_) => {}
+        Err(err) => {
+            println!("Failure::");
+            panic!("{}", err.to_string());
+        }
     }
 
     println!("Success:: ");
