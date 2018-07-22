@@ -648,6 +648,36 @@ fn test_fill_command() {
 }
 
 #[test]
+fn test_void_command() {
+    {
+        let mut state = State::initial(3);
+
+        state.update_one(0, &Command::Fill(NCD::new(1, 0, 0))).unwrap();
+        assert_eq!(state.energy, 12);
+
+        let vc = state.update_one(0, &Command::Void(NCD::new(1, 0, 0))).unwrap().vc;
+        assert_eq!(state.voxel_at(Position::new(1, 0, 0)), Voxel::Void);
+        assert_eq!(state.energy, 0);
+        assert!(state.connectivity_is_dirty);
+        assert_eq!(
+            vc,
+            couple_volatile_coordinates(Position::new(0, 0, 0), Position::new(1, 0, 0))
+        );
+    }
+
+    {
+        let mut state = State::initial(3);
+
+        let vc = state.update_one(0, &Command::Void(NCD::new(1, 0, 0))).unwrap().vc;
+        assert_eq!(state.energy, 3);
+        assert_eq!(
+            vc,
+            couple_volatile_coordinates(Position::new(0, 0, 0), Position::new(1, 0, 0))
+        );
+    }
+}
+
+#[test]
 fn test_fission_command() {
     {
         let mut state = State::initial(3);
