@@ -196,6 +196,8 @@ impl State {
                 let c = self.bots[i].pos;
                 let region = Region(c + ncd, c + ncd + fcd).canonical();
 
+                //println!("c={}, region={:?}", c, region);
+
                 let positions = groups.entry(region).or_insert_with(|| HashSet::new());
                 if !positions.insert(c + ncd) {
                     let message = format!("duplicate vertex in GVoid: {}", c + ncd);
@@ -206,7 +208,7 @@ impl State {
 
         for (region, group) in groups.iter() {
             if group.len() != (1 << region.dimension()) {
-                let message = format!("lack of members to GVoid");
+                let message = format!("lack of members to GVoid: len={}, dim={}", group.len(), region.dimension());
                 return Err(Box::new(SimulationError::new(message)));
             }
         }
@@ -450,8 +452,6 @@ impl State {
                     // それ以外の GVoid はエラーチェックのみ
                     return Ok(UpdateOneOutput::from_single_volatile_coordinate(c));
                 }
-
-                // TODO: It is also an error if boti.pos + ndi = botj.pos + ndj (for i ≠ j)
 
                 for p in region.iter() {
                     match self.voxel_at(p) {
@@ -975,7 +975,10 @@ fn test_update_time_step() {
         expected_energy += 3 * 3 * 3 * 30 + 20;
         assert_eq!(state.energy, expected_energy);
     }
+}
 
+#[test]
+fn test_update_time_step_bot_order() {
     {
         let mut state = State::initial(3);
         state
@@ -993,6 +996,72 @@ fn test_update_time_step() {
             vec![Bid(1), Bid(2), Bid(3), Bid(8)]
         )
     }
+}
+
+#[test]
+fn test_update_time_step_gvoid() {
+    let original_state = {
+        let mut state = State::initial(3);
+        state
+            .update_time_step(&vec![Command::Fission(NCD::new(1, 0, 0), 4)])
+            .unwrap();
+        state
+            .update_time_step(&vec![
+                Command::Fission(NCD::new(0, 1, 0), 1),
+                Command::Fission(NCD::new(0, 1, 0), 1),
+            ])
+            .unwrap();
+
+        // for bot in state.bots.iter() {
+        //     println!("{:?}: {}", bot.bid, bot.pos);
+        // }
+        // -> Bid(1): (0, 0, 0)
+        //    Bid(2): (1, 0, 0)
+        //    Bid(3): (1, 1, 0)
+        //    Bid(7): (0, 1, 0)
+
+        state
+    };
+
+    {
+        // 正常系
+        let mut state = original_state.clone();
+        state
+            .update_time_step(&vec![
+                Command::GVoid(NCD::new(0, 0, 1), FCD::new(1, 1, 0)),
+                Command::GVoid(NCD::new(0, 0, 1), FCD::new(-1, 1, 0)),
+                Command::GVoid(NCD::new(0, 0, 1), FCD::new(-1, -1, 0)),
+                Command::GVoid(NCD::new(0, 0, 1), FCD::new(1, -1, 0)),
+            ])
+            .unwrap();
+    }
+
+    {
+        // 異常系: 数が足りない
+        let mut state = original_state.clone();
+        let r = state
+            .update_time_step(&vec![
+                Command::GVoid(NCD::new(0, 0, 1), FCD::new(1, 1, 1)),
+                Command::GVoid(NCD::new(0, 0, 1), FCD::new(-1, 1, 1)),
+                Command::GVoid(NCD::new(0, 0, 1), FCD::new(-1, -1, 1)),
+                Command::Wait,
+            ]);
+        assert!(r.is_err());
+    }
+
+    {
+        // 異常系: 頂点がかぶっている
+        let mut state = original_state.clone();
+        let r = state
+            .update_time_step(&vec![
+                Command::GVoid(NCD::new(0, 0, 1), FCD::new(1, 1, 1)),
+                Command::GVoid(NCD::new(0, 0, 1), FCD::new(-1, 1, 1)),
+                Command::GVoid(NCD::new(0, 0, 1), FCD::new(-1, -1, 1)),
+                Command::GVoid(NCD::new(0, -1, 1), FCD::new(1, 1, 1)),
+            ]);
+        assert!(r.is_err());
+    }
+
 }
 
 #[test]
