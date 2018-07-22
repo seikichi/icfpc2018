@@ -134,7 +134,8 @@ impl State {
             deleted_bot_bids.extend(output.deleted_bot_bids)
         }
 
-        self.verify_fusion_command(commands)?;
+        self.verify_fusion_commands(commands)?;
+        self.verify_gvoid_commands(commands)?;
 
         self.bots.retain(|bot| !deleted_bot_bids.contains(&bot.bid));
         self.bots.extend(added_bots);
@@ -148,7 +149,7 @@ impl State {
         Ok(())
     }
 
-    fn verify_fusion_command(&self, commands: &[Command]) -> Result<(), Box<Error>> {
+    fn verify_fusion_commands(&self, commands: &[Command]) -> Result<(), Box<Error>> {
         let mut fusionps = HashMap::<Position, Position>::new();
         for (i, c) in commands.iter().enumerate() {
             if let Command::FusionP(ncd) = c {
@@ -182,6 +183,32 @@ impl State {
                 fusions_cnt
             );
             return Err(Box::new(SimulationError::new(message)));
+        }
+
+        Ok(())
+    }
+
+    fn verify_gvoid_commands(&self, commands: &[Command]) -> Result<(), Box<Error>> {
+        let mut groups = HashMap::new();
+
+        for (i, command) in commands.iter().enumerate() {
+            if let Command::GVoid(ncd, fcd) = command {
+                let c = self.bots[i].pos;
+                let region = Region(c + ncd, c + ncd + fcd).canonical();
+
+                let positions = groups.entry(region).or_insert_with(|| HashSet::new());
+                if !positions.insert(c + ncd) {
+                    let message = format!("duplicate vertex in GVoid: {}", c + ncd);
+                    return Err(Box::new(SimulationError::new(message)));
+                }
+            }
+        }
+
+        for (region, group) in groups.iter() {
+            if group.len() != (1 << region.dimension()) {
+                let message = format!("lack of members to GVoid");
+                return Err(Box::new(SimulationError::new(message)));
+            }
         }
 
         Ok(())
@@ -884,7 +911,7 @@ fn test_gvoid_commmand() {
                 for x in 1..10 {
                     state.bots[0].pos = Position::new(x, y + 1, z);
                     let command = Command::Fill(NCD::new(0, -1, 0));
-                    state.update_one(0, &command);
+                    state.update_one(0, &command).unwrap();
                 }
             }
         }
