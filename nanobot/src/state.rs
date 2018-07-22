@@ -335,24 +335,7 @@ impl State {
                     return Err(Box::new(SimulationError::new(message)));
                 }
 
-                match self.voxel_at(new_c) {
-                    Voxel::Void => {
-                        self.set_voxel_at(new_c, Voxel::Full);
-                        self.energy += 12;
-
-                        for p in adjacent(new_c) {
-                            if self.is_valid_coordinate(&p) && self.voxel_at(p) == Voxel::Full {
-                                self.connectivity.union_set(new_c.index(r), p.index(r));
-                            }
-                        }
-
-                        if new_c.y == 0 {
-                            self.connectivity.union_set(new_c.index(r), r * r * r);
-                        }
-                        self.full_voxel_count += 1;
-                    }
-                    Voxel::Full => self.energy += 6,
-                }
+                self.fill_voxel(new_c);
 
                 let vc = couple_volatile_coordinates(c, new_c);
                 Ok(UpdateOneOutput::from_vc(vc))
@@ -491,7 +474,39 @@ impl State {
                 Ok(UpdateOneOutput::from_vc(vc))
             }
 
-            _ => unimplemented!(),
+            Command::GFill(ncd, fcd) => {
+                let region = Region(c + ncd, c + ncd + fcd);
+                if !self.is_valid_coordinate(&region.0) || !self.is_valid_coordinate(&region.1) {
+                    let message = format!(
+                        "nanobot is out of matrix: command=GFill, c={}, ncd={:?}, fcd={:?}",
+                        c, ncd, fcd
+                    );
+                    return Err(Box::new(SimulationError::new(message)));
+                }
+                if region.contains(c) {
+                    let message = format!(
+                        "nanobot is in the region: command=GFill, c={}, ncd={:?}, fcd={:?}",
+                        c, ncd, fcd
+                    );
+                    return Err(Box::new(SimulationError::new(message)));
+                }
+
+                if region != region.canonical() {
+                    // canonical な region を持つ bot が代表してコマンドを実行するので
+                    // それ以外の GFill はエラーチェックのみ
+                    return Ok(UpdateOneOutput::from_single_volatile_coordinate(c));
+                }
+
+                for p in region.iter() {
+                    self.fill_voxel(p);
+                }
+
+                let mut vc = VolatileCoordinates::new();
+                vc.insert(c);
+                vc.extend(region.iter());
+
+                Ok(UpdateOneOutput::from_vc(vc))
+            }
         }
     }
 
@@ -537,6 +552,29 @@ impl State {
         self.bots[nanobot_index].pos = new_c;
         self.energy += 2 * diff.manhattan_length() as i64;
         Ok(Region(c, new_c).iter().collect())
+    }
+
+    fn fill_voxel(&mut self, c: Position) {
+        let r = self.matrix.len();
+
+        match self.voxel_at(c) {
+            Voxel::Void => {
+                self.set_voxel_at(c, Voxel::Full);
+                self.energy += 12;
+
+                for p in adjacent(c) {
+                    if self.is_valid_coordinate(&p) && self.voxel_at(p) == Voxel::Full {
+                        self.connectivity.union_set(c.index(r), p.index(r));
+                    }
+                }
+
+                if c.y == 0 {
+                    self.connectivity.union_set(c.index(r), r * r * r);
+                }
+                self.full_voxel_count += 1;
+            }
+            Voxel::Full => self.energy += 6,
+        }
     }
 
     fn is_valid_coordinate(&self, p: &Position) -> bool {
