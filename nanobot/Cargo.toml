@@ -13,3 +13,7 @@ path = "src/lib.rs"
 [[bin]]
 name = "score"
 path = "src/bin/score.rs"
+
+[[bin]]
+name = "nanobot"
+path = "src/main.rs"
