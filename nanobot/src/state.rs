@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use common::*;
 use model::Model;
 use std::collections::HashMap;
@@ -310,7 +312,6 @@ impl State {
         command: &Command,
     ) -> Result<UpdateOneOutput, Box<Error>> {
         let c = self.bots[nanobot_index].pos;
-        let r = self.matrix.len();
 
         match command {
             Command::Halt => {
