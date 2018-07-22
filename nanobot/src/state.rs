@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use common::*;
 use model::Model;
 use std::collections::HashMap;
@@ -46,6 +48,10 @@ impl State {
         state.matrix = model.matrix.clone();
         state.connectivity_is_dirty = true;
         state
+    }
+    pub fn same_model(&self, model: &Model) -> bool {
+        assert!(self.matrix.len() == model.matrix.len());
+        self.matrix == model.matrix
     }
     pub fn get_energy(&self) -> i64 {
         self.energy
@@ -310,7 +316,6 @@ impl State {
         command: &Command,
     ) -> Result<UpdateOneOutput, Box<Error>> {
         let c = self.bots[nanobot_index].pos;
-        let r = self.matrix.len();
 
         match command {
             Command::Halt => {

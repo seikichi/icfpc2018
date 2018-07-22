@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::cmp::*;
 use std::error::*;
 use std::fmt;
@@ -200,7 +202,7 @@ fn command_encdec_test() {
     assert_eq!(flip_enc.len(), 1);
     assert_eq!(flip_enc[0], 0b11111101);
     assert_eq!(flip2, flip);
-    assert_eq!(offset, 1);;
+    assert_eq!(offset, 1);
 
     let mut offset = 0;
     let smove = Command::SMove(LLCD::new(12, 0, 0));
@@ -721,7 +723,7 @@ pub fn write_trace_file(path: &Path, trace: &[Command]) -> Result<(), Box<Error>
 pub fn read_trace_file(path: &Path) -> Result<Vec<Command>, Box<Error>> {
     let mut f = fs::File::open(path)?;
     let mut buffer = vec![];
-    f.read_to_end(&mut buffer);
+    f.read_to_end(&mut buffer)?;
     let ret = decode_trace(&buffer[..]);
     Ok(ret)
 }
