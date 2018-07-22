@@ -858,6 +858,59 @@ fn test_fusion_command() {
 }
 
 #[test]
+fn test_gvoid_commmand() {
+    let original_state = {
+        let mut state = State::initial(10);
+        for y in 0..9 {
+            for z in 0..10 {
+                for x in 1..10 {
+                    state.bots[0].pos = Position::new(x, y+1, z);
+                    let command = Command::Fill(NCD::new(0, -1, 0));
+                    state.update_one(0, &command);
+                }
+            }
+        }
+        state.bots[0].pos = Position::zero();
+        state
+    };
+
+    {
+        let mut state = original_state.clone();
+        let prev_energy = state.energy;
+
+        let gvoid = Command::GVoid(NCD::new(1, 0, 0), FCD::new(4, 5, 6));
+        let vc = state.update_one(0, &gvoid).unwrap().vc;
+
+        let region = Region(Position::new(1, 0, 0), Position::new(5, 5, 6));
+        for p in region.iter() {
+            assert_eq!(state.voxel_at(p), Voxel::Void);
+        }
+
+        // 範囲外の点を代表していくつか verify しておく
+        assert_eq!(state.voxel_at(Position::new(6, 1, 1)), Voxel::Full);
+        assert_eq!(state.voxel_at(Position::new(1, 6, 1)), Voxel::Full);
+        assert_eq!(state.voxel_at(Position::new(1, 1, 7)), Voxel::Full);
+
+        // verify energy
+        assert_eq!(state.energy, prev_energy - 12 * (4 + 1) * (5 + 1) * (6 + 1));
+
+        // verify vc
+        let mut expected_vc = VolatileCoordinates::new();
+        expected_vc.insert(Position::zero());
+        expected_vc.extend(region.iter());
+        assert_eq!(vc, expected_vc);
+    }
+
+    {
+        let mut state = original_state.clone();
+
+        let gvoid = Command::GVoid(NCD::new(1, 0, 0), FCD::new(-1, 0, 0));
+        let r = state.update_one(0, &gvoid);
+        assert!(r.is_err());
+    }
+}
+
+#[test]
 fn test_update_time_step() {
     {
         let mut state = State::initial(3);
