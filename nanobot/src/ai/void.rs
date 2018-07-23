@@ -1,3 +1,4 @@
+use ai::config::Config;
 use ai::utils::*;
 use ai::DisassembleAI;
 use common::*;
@@ -6,11 +7,15 @@ use state::State;
 use std::cmp::min;
 use std::iter::repeat;
 
-pub struct VoidAI {}
+pub struct VoidAI {
+    dry_run_max_resolution: i32,
+}
 
 impl VoidAI {
-    pub fn new() -> Self {
-        VoidAI {}
+    pub fn new(config: &Config) -> Self {
+        VoidAI {
+            dry_run_max_resolution: config.dry_run_max_resolution,
+        }
     }
 }
 
@@ -23,6 +28,8 @@ impl DisassembleAI for VoidAI {
             }
         };
 
+        let r = model.matrix.len();
+        let dry_run = r <= self.dry_run_max_resolution as usize;
         let mut state = State::initial_with_model(model);
 
         let x_size = (bounding.max_x - bounding.min_x + 1) as usize;
@@ -110,13 +117,51 @@ impl DisassembleAI for VoidAI {
                 break;
             }
 
-            if !harmonity_high {
-                match state.update_time_step(&step[..]) {
-                    Ok(_) => {}
-                    Err(_) => {
-                        harmonity_high = true;
-                        commands.push(Command::Flip);
-                        commands.extend(repeat(Command::Wait).take(commands_list.len() - 1));
+            if dry_run {
+                let mut cloned = state.clone();
+                if !harmonity_high {
+                    match cloned.update_time_step(&step[..]) {
+                        Ok(_) => {
+                            state = cloned;
+                        }
+                        Err(_) => {
+                            harmonity_high = true;
+                            let mut high = vec![Command::Flip];
+                            high.extend(repeat(Command::Wait).take(commands_list.len() - 1));
+                            state.update_time_step(&high[..]).unwrap();
+                            state.update_time_step(&step[..]).unwrap();
+                            commands.extend(high);
+                        }
+                    }
+                } else {
+                    let mut low = vec![Command::Flip];
+                    low.extend(repeat(Command::Wait).take(commands_list.len() - 1));
+
+                    match cloned.update_time_step(&low[..]) {
+                        Ok(_) => match cloned.update_time_step(&step[..]) {
+                            Ok(_) => {
+                                harmonity_high = false;
+                                state = cloned;
+                                commands.extend(low);
+                            }
+                            Err(_) => {
+                                state.update_time_step(&step[..]).unwrap();
+                            }
+                        },
+                        Err(_) => {
+                            state.update_time_step(&step[..]).unwrap();
+                        }
+                    }
+                }
+            } else {
+                if !harmonity_high {
+                    match state.update_time_step(&step[..]) {
+                        Ok(_) => {}
+                        Err(_) => {
+                            harmonity_high = true;
+                            commands.push(Command::Flip);
+                            commands.extend(repeat(Command::Wait).take(commands_list.len() - 1));
+                        }
                     }
                 }
             }

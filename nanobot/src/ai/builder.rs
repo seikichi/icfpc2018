@@ -19,9 +19,9 @@ pub fn build_assembler(name: &String, config: &Config, _target: &Model) -> Box<A
     }
 }
 
-pub fn build_disassembler(name: &String, _config: &Config, _source: &Model) -> Box<DisassembleAI> {
+pub fn build_disassembler(name: &String, config: &Config, _source: &Model) -> Box<DisassembleAI> {
     match name.as_str() {
-        "default" => Box::new(VoidAI::new()),
+        "default" => Box::new(VoidAI::new(config)),
         _ => {
             eprintln!("failed to build assembler AI (name = {})", name);
             process::exit(1);
