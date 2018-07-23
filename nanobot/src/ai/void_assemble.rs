@@ -38,7 +38,6 @@ impl AssembleAI for VoidAssembleAI {
         let mut harmonity_high = false;
 
         let x_size = (bounding.max_x - bounding.min_x + 1) as usize;
-        let z_size = (bounding.max_z - bounding.min_z + 1) as usize;
         let xsplit = min(x_size, 40);
 
         let mut commands = vec![];
@@ -50,14 +49,20 @@ impl AssembleAI for VoidAssembleAI {
             state.update_time_step(&v[..]).expect("failed to move");
         }
 
-        for v in generate_devide_commands((x_size, z_size), (xsplit, 1)).into_iter() {
+        let x_width_list = calc_width_list_by_density(
+            &target,
+            bounding.min_x as usize,
+            bounding.max_x as usize,
+            xsplit,
+        );
+
+        for v in generate_x_devide_commands(&x_width_list).into_iter() {
             state.update_time_step(&v[..]).expect("failed to devide");
             commands.extend(v);
         }
 
         let mut fill_commands_list: Vec<Vec<Command>> = vec![];
         let mut void_commands_list: Vec<Vec<Command>> = vec![];
-        let x_width_list = calc_width_list(x_size, xsplit);
 
         for i in 0..xsplit {
             let mut x = bounding.min_x;
@@ -177,7 +182,7 @@ impl AssembleAI for VoidAssembleAI {
         }
         // each nanobot (x_i, 0, min_z-1)
         commands.extend(
-            generate_concur_commands((x_size, z_size), (xsplit, 1))
+            generate_x_concur_commands(&x_width_list)
                 .iter()
                 .flat_map(|v| v.iter()),
         );
@@ -353,13 +358,45 @@ fn generate_fill_and_void_commands(
     (commands, void_commands)
 }
 
-fn calc_width_list(size: usize, split: usize) -> Vec<i32> {
-    let mut list = vec![];
-    for i in 0..split {
-        let width = (size / split) as i32 + if i < size % split { 1 } else { 0 };
-        list.push(width);
+fn calc_width_list_by_density(model: &Model, min_x: usize, max_x: usize, split: usize) -> Vec<i32> {
+    let mut sum = 0;
+    let mut plane_sum = vec![];
+    let r = model.matrix.len();
+    for x in min_x..=max_x {
+        let mut s = 0;
+        for y in 0..r {
+            for z in 0..r {
+                let voxel = &model.matrix[x as usize][y as usize][z as usize];
+                if *voxel == Voxel::Void {
+                    continue;
+                }
+                s += 1;
+            }
+        }
+        sum += s;
+        plane_sum.push(s);
     }
-    list
+
+    let mut v = plane_sum.clone();
+    let mut width_list = vec![1; v.len()];
+
+    while width_list.len() > split {
+        let mut index = 0;
+        let mut min = sum;
+        for i in 0..v.len() - 1 {
+            if v[i] + v[i + 1] < min {
+                min = v[i] + v[i + 1];
+                index = i;
+            }
+        }
+
+        v[index] += v[index + 1];
+        width_list[index] += width_list[index + 1];
+        v.remove(index + 1);
+        width_list.remove(index + 1);
+    }
+
+    width_list
 }
 
 fn find_fill_path(target: &Model, region: &Region, initial: &Position) -> Vec<Position> {
@@ -608,4 +645,54 @@ fn test_void_path() {
         Position::new(1, 0, 0),
     ];
     assert_eq!(expected, actual);
+}
+
+fn generate_x_devide_commands(width_list: &Vec<i32>) -> Vec<Vec<Command>> {
+    let mut commands = vec![];
+
+    let ncd_x1 = NCD::new(1, 0, 0);
+    for i in 0..(width_list.len() - 1) {
+        let rest = width_list.len() - i - 1;
+
+        let mut step = vec![];
+        step.extend(repeat(Command::Wait).take(i));
+        step.push(Command::Fission(ncd_x1.clone(), rest - 1));
+        commands.push(step);
+
+        let width = width_list[i];
+        let x_moves = move_straight_x(width - 1);
+        for m in x_moves.into_iter() {
+            let mut step = vec![];
+            step.extend(repeat(Command::Wait).take(i + 1));
+            step.push(m);
+            commands.push(step);
+        }
+    }
+
+    commands
+}
+
+fn generate_x_concur_commands(width_list: &Vec<i32>) -> Vec<Vec<Command>> {
+    let mut commands = vec![];
+    // concur x axis
+    let ncd_x1 = NCD::new(1, 0, 0);
+    let ncd_x_1 = NCD::new(-1, 0, 0);
+    for i in 0..(width_list.len() - 1) {
+        let width = width_list[width_list.len() - i - 2];
+        let x_moves = move_straight_x(-(width - 1));
+        for m in x_moves.into_iter() {
+            let mut step = vec![];
+            step.extend(repeat(Command::Wait).take(width_list.len() - i - 1));
+            step.push(m);
+            commands.push(step);
+        }
+        // fusion
+        let mut step = vec![];
+        step.extend(repeat(Command::Wait).take(width_list.len() - i - 2));
+        step.push(Command::FusionP(ncd_x1.clone()));
+        step.push(Command::FusionS(ncd_x_1.clone()));
+        commands.push(step);
+    }
+
+    commands
 }
