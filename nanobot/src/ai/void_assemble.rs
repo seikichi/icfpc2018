@@ -39,7 +39,7 @@ impl AssembleAI for VoidAssembleAI {
 
         let x_size = (bounding.max_x - bounding.min_x + 1) as usize;
         let z_size = (bounding.max_z - bounding.min_z + 1) as usize;
-        let xsplit = min(x_size, 20);
+        let xsplit = min(x_size, 40);
 
         let mut commands = vec![];
         commands.extend(move_straight_x(bounding.min_x));
