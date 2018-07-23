@@ -1,13 +1,13 @@
+use ai::AssembleAI;
 use ai::bfs::BfsAI;
 use ai::config::Config;
+use ai::DisassembleAI;
 use ai::grid_fission::GridFissionAI;
 use ai::naive_reassemble::NaiveReassembleAI;
-use ai::void::VoidAI;
-use ai::AssembleAI;
-use ai::DisassembleAI;
 use ai::ReassembleAI;
+use ai::squad::SquadAI;
+use ai::void::VoidAI;
 use model::Model;
-
 use std::process;
 
 pub fn build_assembler(name: &String, config: &Config, target: &Model) -> Box<AssembleAI> {
@@ -16,6 +16,7 @@ pub fn build_assembler(name: &String, config: &Config, target: &Model) -> Box<As
     match name.as_str() {
         "default" => Box::new(GridFissionAI::new(config)),
         "bfs" => Box::new(BfsAI::new(config, &source, &target)),
+        "squad" => Box::new(SquadAI::new(config)),
         _ => {
             eprintln!("failed to build assembler AI (name = {})", name);
             process::exit(1);

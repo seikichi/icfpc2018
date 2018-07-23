@@ -57,6 +57,8 @@ impl AssembleAI for SquadAI {
         // squad を spawn する
         let (squads, bot_commands) = self.spawn_squads(&bounding, model);
 
+        println!("{:?}", bot_commands);
+
         let mut command_lists = vec![vec![]; squads.len()];
 
         // 各フロアを埋めていく
@@ -69,7 +71,12 @@ impl AssembleAI for SquadAI {
 
         // SquadCommandをBotCommandに戻す
 
-        unimplemented!()
+
+        // hoge
+        let commands = bot_commands_to_commands(&bot_commands);
+
+        println!("commands={:?}", commands);
+        commands
     }
 }
 
@@ -111,8 +118,10 @@ fn bot_commands_to_commands(bot_commands: &[BotCommand]) -> Vec<Command> {
         while i < bot_commands.len() && bot_commands[i].time == t {
             let c = bot_commands[i];
             if current_bots.contains(&c.bid) {
+                println!("c={:?}", c);
+
                 if command_map.insert(c.bid, c.command).is_some() {
-                    panic!("duplicate key: bid={:?}, command={:?}", c.bid, c.command);
+                    panic!("duplicate key: t={}, bid={:?}, command={:?}", t, c.bid, c.command);
                 }
                 if let Command::FusionS(_) = c.command {
                     next_bots.remove(&c.bid);
@@ -121,6 +130,7 @@ fn bot_commands_to_commands(bot_commands: &[BotCommand]) -> Vec<Command> {
                 assert_eq!(c.command, Command::Wait);
                 next_bots.insert(c.bid);
             }
+            i += 1;
         }
 
         {
@@ -136,6 +146,7 @@ fn bot_commands_to_commands(bot_commands: &[BotCommand]) -> Vec<Command> {
         }
 
         current_bots = next_bots.clone();
+        t += 1;
     }
 
     ret
@@ -153,15 +164,17 @@ impl SquadAI {
             let mut bot = nanobots.get_mut(&Bid(1)).unwrap();
 
             let mut cmd1 = bot_move_straight_x(bounding.min_x, &mut bot, t);
-            bot_commands.append(&mut cmd1);
             t += cmd1.len();
+            bot_commands.append(&mut cmd1);
+            println!("t={}, bot_commands={:?}", t, bot_commands);
 
             let mut cmd2 = bot_move_straight_z(bounding.min_z, &mut bot, t);
-            bot_commands.append(&mut cmd2);
             t += cmd2.len();
+            bot_commands.append(&mut cmd2);
+            println!("t={}, bot_commands={:?}", t, bot_commands);
         }
 
-        let unit_size = 4;
+        let unit_size = 4 as usize;
         let n_split = 10;
         let x_width = bounding.max_x - bounding.min_x + 1;
         let x_interval = (x_width + n_split - 1) / n_split;
@@ -169,22 +182,24 @@ impl SquadAI {
         let mut right_most = Bid(1);
         let mut squads = Vec::new();
 
-        for i in 0..squads.len() {
-            let rest = unit_size * (squads.len() - i - 1);
+        for i in 0..n_split {
             let mut squad_member1 = nanobots.get_mut(&right_most).unwrap().clone();
 
-            let next_t = if i != squads.len() - 1 {
+            let next_t = if i != n_split - 1 {
+                println!("squad_member1={:?}", squad_member1);
+                let m = squad_member1.seeds.len() - unit_size;
                 let (mut next_bot, mut commands) = bot_fission(
-                    &mut squad_member1, t, NCD::new(1, 0, 0), rest - unit_size + 1);
+                    &mut squad_member1, t, NCD::new(1, 0, 0), m);
                 nanobots.insert(next_bot.bid, next_bot.clone());
                 bot_commands.append(&mut commands);
                 right_most = next_bot.bid;
                 t += 1;
 
                 let mut smoves = bot_move_straight_x(x_interval - 1, &mut next_bot, t);
+                let next_t = t + smoves.len();
                 bot_commands.append(&mut smoves);
 
-                t + smoves.len()
+                next_t
             } else {
                 0
             };
