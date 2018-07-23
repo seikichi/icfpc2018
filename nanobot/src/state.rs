@@ -287,7 +287,7 @@ impl State {
                 return false;
             }
 
-            self.reculculate_connectivity()
+            self.recalculate_connectivity()
         }
 
         self.does_floating_voxel_exist_with_cache()
@@ -298,7 +298,7 @@ impl State {
         self.connectivity.size(r * r * r) - 1 != self.full_voxel_count as usize
     }
 
-    fn reculculate_connectivity(&mut self) {
+    fn recalculate_connectivity(&mut self) {
         let r = self.matrix.len();
 
         self.connectivity = UnionFind::new(r * r * r + 1);
@@ -647,10 +647,18 @@ impl State {
         } else {
             (c.y == r - 1 || self.voxel_at(c + &NCD::new(0, 1, 0)) == Voxel::Void) &&
                 self.voxel_at(c + &NCD::new(0, -1, 0)) == Voxel::Full &&
-                (c.x == 0 || self.voxel_at(c + &NCD::new(-1, -1, 0)) == Voxel::Full) &&
-                (c.z == 0 || self.voxel_at(c + &NCD::new(0, -1, -1)) == Voxel::Full) &&
-                (c.x == r - 1 || self.voxel_at(c + &NCD::new(1, -1, 0)) == Voxel::Full) &&
-                (c.z == r - 1 || self.voxel_at(c + &NCD::new(0, -1, 1)) == Voxel::Full)
+                (c.x == 0 ||
+                    self.voxel_at(c + &NCD::new(-1, 0, 0)) == Voxel::Void ||
+                    self.voxel_at(c + &NCD::new(-1, -1, 0)) == Voxel::Full) &&
+                (c.z == 0 ||
+                    self.voxel_at(c + &NCD::new(0, 0, -1)) == Voxel::Void ||
+                    self.voxel_at(c + &NCD::new(0, -1, -1)) == Voxel::Full) &&
+                (c.x == r - 1 ||
+                    self.voxel_at(c + &NCD::new(1, 0, 0)) == Voxel::Void ||
+                    self.voxel_at(c + &NCD::new(1, -1, 0)) == Voxel::Full) &&
+                (c.z == r - 1 ||
+                    self.voxel_at(c + &NCD::new(0, 0, 1)) == Voxel::Void ||
+                    self.voxel_at(c + &NCD::new(0, -1, 1)) == Voxel::Full)
         }
     }
 
