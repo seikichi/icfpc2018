@@ -12,11 +12,15 @@ use std::collections::{BinaryHeap, HashSet};
 use std::ops::Deref;
 // use std::iter::repeat;
 
-pub struct VoidAssembleAI {}
+pub struct VoidAssembleAI {
+    dry_run_max_resolution: i32,
+}
 
 impl VoidAssembleAI {
-    pub fn new(_config: &Config) -> Self {
-        VoidAssembleAI {}
+    pub fn new(config: &Config) -> Self {
+        VoidAssembleAI {
+            dry_run_max_resolution: config.dry_run_max_resolution,
+        }
     }
 }
 
@@ -28,6 +32,11 @@ impl AssembleAI for VoidAssembleAI {
                 return vec![Command::Halt];
             }
         };
+        let r = target.matrix.len();
+        let dry_run = r <= self.dry_run_max_resolution as usize;
+        let mut state = State::initial(r);
+        let mut harmonity_high = false;
+
         let x_size = (bounding.max_x - bounding.min_x + 1) as usize;
         let z_size = (bounding.max_z - bounding.min_z + 1) as usize;
         let xsplit = min(x_size, 20);
@@ -38,9 +47,11 @@ impl AssembleAI for VoidAssembleAI {
 
         for m in commands.iter() {
             let v = vec![m.clone()];
+            state.update_time_step(&v[..]).expect("failed to move");
         }
 
         for v in generate_devide_commands((x_size, z_size), (xsplit, 1)).into_iter() {
+            state.update_time_step(&v[..]).expect("failed to devide");
             commands.extend(v);
         }
 
@@ -79,13 +90,13 @@ impl AssembleAI for VoidAssembleAI {
                 if all_wait {
                     break;
                 }
+                state
+                    .update_time_step(&step[..])
+                    .expect("failed to ground fill");
                 commands.extend(step);
                 index += 1;
             }
         }
-        let mut high = vec![Command::Flip];
-        high.extend(repeat(Command::Wait).take(fill_commands_list.len() - 1));
-        commands.extend(high);
         // void
         {
             let mut index = 0;
@@ -103,13 +114,67 @@ impl AssembleAI for VoidAssembleAI {
                 if all_wait {
                     break;
                 }
+                if dry_run {
+                    let mut cloned = state.clone();
+                    if !harmonity_high {
+                        match cloned.update_time_step(&step[..]) {
+                            Ok(_) => {
+                                state = cloned;
+                            }
+                            Err(_) => {
+                                harmonity_high = true;
+                                let mut high = vec![Command::Flip];
+                                high.extend(
+                                    repeat(Command::Wait).take(void_commands_list.len() - 1),
+                                );
+                                state.update_time_step(&high[..]).unwrap();
+                                state.update_time_step(&step[..]).unwrap();
+                                commands.extend(high);
+                            }
+                        }
+                    } else {
+                        let mut low = vec![Command::Flip];
+                        low.extend(repeat(Command::Wait).take(void_commands_list.len() - 1));
+
+                        match cloned.update_time_step(&low[..]) {
+                            Ok(_) => match cloned.update_time_step(&step[..]) {
+                                Ok(_) => {
+                                    harmonity_high = false;
+                                    state = cloned;
+                                    commands.extend(low);
+                                }
+                                Err(_) => {
+                                    state.update_time_step(&step[..]).unwrap();
+                                }
+                            },
+                            Err(_) => {
+                                state.update_time_step(&step[..]).unwrap();
+                            }
+                        }
+                    }
+                } else {
+                    if !harmonity_high {
+                        match state.update_time_step(&step[..]) {
+                            Ok(_) => {}
+                            Err(_) => {
+                                harmonity_high = true;
+                                commands.push(Command::Flip);
+                                commands.extend(
+                                    repeat(Command::Wait).take(void_commands_list.len() - 1),
+                                );
+                            }
+                        }
+                    }
+                }
                 commands.extend(step);
                 index += 1;
             }
         }
-        let mut low = vec![Command::Flip];
-        low.extend(repeat(Command::Wait).take(fill_commands_list.len() - 1));
-        commands.extend(low);
+        if harmonity_high {
+            let mut low = vec![Command::Flip];
+            low.extend(repeat(Command::Wait).take(fill_commands_list.len() - 1));
+            commands.extend(low);
+        }
         // each nanobot (x_i, 0, min_z-1)
         commands.extend(
             generate_concur_commands((x_size, z_size), (xsplit, 1))
@@ -137,14 +202,14 @@ fn generate_fill_and_void_commands(
     let mut cur = Position::new(initial.x, initial.y, initial.z);
 
     // fill
-    let mut commands = vec![
-        Command::SMove(LLCD::new(0, 1, 0)),
-        Command::Fill(NCD::new(0, -1, 0)),
-    ];
+    let mut commands = vec![Command::SMove(LLCD::new(0, 1, 0))];
     {
         cur.y += 1;
         let path = find_fill_path(target, region, initial);
-        source.matrix[cur.x as usize][(cur.y - 1) as usize][cur.z as usize] = Voxel::Full;
+        if target.matrix[cur.x as usize][(cur.y - 1) as usize][cur.z as usize] == Voxel::Full {
+            commands.push(Command::Fill(NCD::new(0, -1, 0)));
+            source.matrix[cur.x as usize][(cur.y - 1) as usize][cur.z as usize] = Voxel::Full;
+        }
 
         for next in path.into_iter() {
             let dx = next.x - cur.x;
