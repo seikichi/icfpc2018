@@ -295,10 +295,13 @@ fn generate_xz_fusion_commands(grid_index_x: &[usize], grid_index_z: &[usize]) -
     }
 
     let mut step: Vec<Command> = vec![];
-    step.extend(repeat(Command::FusionS(NCD::new(0, 0, 1))).take(grid_num_x));
-    step.extend(repeat(Command::FusionP(NCD::new(0, 0, -1))).take(grid_num_x));
+    step.extend(repeat(Command::FusionP(NCD::new(0, 0, 1))).take(grid_num_x));
+    step.extend(repeat(Command::FusionS(NCD::new(0, 0, -1))).take(grid_num_x));
     commands.push(step);
 
+    let mut step: Vec<Command> = vec![];
+    step.extend(repeat(Command::SMove(LLCD::new(0, 0, 1))).take(grid_num_x));
+    commands.push(step);
 
     // fusion in x coordinate
     for ri in 0..(grid_num_x - 1) {
@@ -306,15 +309,15 @@ fn generate_xz_fusion_commands(grid_index_x: &[usize], grid_index_z: &[usize]) -
         let width = grid_index_x[i] - grid_index_x[i - 1] + 1;
         for m in move_straight_x(-(width as i32 - 2)) {
             let mut step = vec![];
-            step.push(m.clone());
             step.extend(repeat(Command::Wait).take(i));
+            step.push(m.clone());
             commands.push(step);
         }
 
         let mut step = vec![];
-        step.push(Command::FusionS(NCD::new(-1, 0, 0)));
-        step.push(Command::FusionP(NCD::new(1, 0, 0)));
         step.extend(repeat(Command::Wait).take(i - 1));
+        step.push(Command::FusionP(NCD::new(1, 0, 0)));
+        step.push(Command::FusionS(NCD::new(-1, 0, 0)));
         commands.push(step);
     }
     commands
@@ -460,19 +463,23 @@ fn test_generate_xz_fusion_commands() {
             Command::Wait,
         ],
         vec![
-            Command::FusionS(NCD::new(0, 0, 1)),
-            Command::FusionS(NCD::new(0, 0, 1)),
-            Command::FusionP(NCD::new(0, 0, -1)),
-            Command::FusionP(NCD::new(0, 0, -1)),
+            Command::FusionP(NCD::new(0, 0, 1)),
+            Command::FusionP(NCD::new(0, 0, 1)),
+            Command::FusionS(NCD::new(0, 0, -1)),
+            Command::FusionS(NCD::new(0, 0, -1)),
         ],
         vec![
-            Command::SMove(LLCD::new(-1, 0, 0)),
+            Command::SMove(LLCD::new(0, 0, 1)),
+            Command::SMove(LLCD::new(0, 0, 1)),
+        ],
+        vec![
             Command::Wait,
+            Command::SMove(LLCD::new(-1, 0, 0)),
         ],
         vec![
-            Command::FusionS(NCD::new(-1, 0, 0)),
             Command::FusionP(NCD::new(1, 0, 0)),
-        ],
+            Command::FusionS(NCD::new(-1, 0, 0)),
+        ]
     ];
 
     assert_eq!(expected, actual);

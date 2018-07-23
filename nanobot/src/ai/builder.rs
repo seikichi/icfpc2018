@@ -2,6 +2,7 @@ use ai::bfs::BfsAI;
 use ai::config::Config;
 use ai::grid_fission::GridFissionAI;
 use ai::naive_reassemble::NaiveReassembleAI;
+use ai::reassemble_brute_force::ReassembleBruteForceAI;
 use ai::void::VoidAI;
 use ai::void_assemble::VoidAssembleAI;
 use ai::gvoid::GvoidAI;
@@ -47,6 +48,7 @@ pub fn build_reassembler(
 ) -> Box<ReassembleAI> {
     match name.as_str() {
         "default" => Box::new(NaiveReassembleAI::new(config, source, target)),
+        "bruteforce" => Box::new(ReassembleBruteForceAI::new(config, source, target)),
         _ => {
             eprintln!("failed to build assembler AI (name = {})", name);
             process::exit(1);
