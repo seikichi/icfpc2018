@@ -647,7 +647,7 @@ fn test_void_path() {
     assert_eq!(expected, actual);
 }
 
-pub fn generate_x_devide_commands(width_list: &Vec<i32>) -> Vec<Vec<Command>> {
+fn generate_x_devide_commands(width_list: &Vec<i32>) -> Vec<Vec<Command>> {
     let mut commands = vec![];
 
     let ncd_x1 = NCD::new(1, 0, 0);
@@ -672,7 +672,7 @@ pub fn generate_x_devide_commands(width_list: &Vec<i32>) -> Vec<Vec<Command>> {
     commands
 }
 
-pub fn generate_x_concur_commands(width_list: &Vec<i32>) -> Vec<Vec<Command>> {
+fn generate_x_concur_commands(width_list: &Vec<i32>) -> Vec<Vec<Command>> {
     let mut commands = vec![];
     // concur x axis
     let ncd_x1 = NCD::new(1, 0, 0);
