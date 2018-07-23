@@ -44,6 +44,13 @@ impl Model {
         }
         Ok(Model { matrix })
     }
+    pub fn voxel_at(&self, p: Position) -> Voxel {
+        self.matrix[p.x as usize][p.y as usize][p.z as usize]
+    }
+
+    pub fn set_voxel_at(&mut self, p: Position, v: Voxel) {
+        self.matrix[p.x as usize][p.y as usize][p.z as usize] = v
+    }
 }
 
 #[test]

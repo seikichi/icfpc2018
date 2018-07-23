@@ -7,6 +7,7 @@ use std::fs;
 use std::io::Read;
 use std::io::Write;
 use std::ops::Add;
+use std::ops::Sub;
 use std::path::Path;
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug)]
@@ -592,6 +593,18 @@ impl<'a> Add<&'a CD> for Position {
     }
 }
 
+impl<'a> Sub<&'a CD> for Position {
+    type Output = Position;
+
+    fn sub(self, other: &'a CD) -> Position {
+        Position {
+            x: self.x - other.x(),
+            y: self.y - other.y(),
+            z: self.z - other.z(),
+        }
+    }
+}
+
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug, Hash)]
 pub struct Region(pub Position, pub Position);
 
@@ -653,6 +666,27 @@ pub fn adjacent(p: Position) -> Vec<Position> {
         p + &Position::new(0, 0, -1),
         p + &Position::new(0, 0, 1),
     ]
+}
+
+pub fn all_ncd() -> Vec<NCD> {
+    let mut ret = vec![];
+    for &dx in [-1, 0, 1].iter() {
+        for &dy in [-1, 0, 1].iter() {
+            for &dz in [-1, 0, 1].iter() {
+                if (dx == 0 && dy == 0 && dz == 0) || (dx != 0 && dy != 0 && dz != 0) {
+                    continue;
+                }
+                ret.push(NCD::new(dx, dy, dz));
+            }
+        }
+    }
+    ret
+}
+
+#[test]
+fn all_ncd_test() {
+    let ncds = all_ncd();
+    assert_eq!(ncds.len(), 18);
 }
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug, Hash)]
