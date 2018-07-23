@@ -90,9 +90,16 @@ impl BfsAI {
     fn select_one_candidate(&mut self, from: &Position) -> Option<Position> {
         let mut target = self.candidates.len();
         let mut best = 1 << 30;
-        for (i, c) in self.candidates.iter().enumerate() {
+        'outer_loop: for (i, c) in self.candidates.iter().enumerate() {
             if self.volatiles.contains(c) {
                 continue;
+            }
+            for b in self.bots.iter() {
+                // 自分自身を含めて、botの真上は候補に入れない
+                let pos = b.bot.pos;
+                if c.x == pos.x && c.z == pos.z && c.y > pos.y {
+                    continue 'outer_loop;
+                }
             }
             // TODO candidateの選択をもう少しましにする
             // groundからの距離が近いやつをなるべく優先する
@@ -346,6 +353,9 @@ impl BfsAI {
             let ncd = nto - &to;
             let ncd = NCD::new(ncd.x, ncd.y, ncd.z);
             self.make_fusion_command(p_index, s_index, &ncd);
+            // println!("{:?} {:?} {:?} {:?}", from, nto, to, ncd);
+            // println!("p: {:?}", self.bots[p_index].next_commands);
+            // println!("s: {:?}", self.bots[s_index].next_commands);
             break;
         }
     }
@@ -562,7 +572,7 @@ impl AssembleAI for BfsAI {
                 }
             }
         }
-        while self.bots.len() < 7 {
+        while self.bots.len() < 40 {
             // 1ターンランダムムーブする
             for i in 0..self.bots.len() {
                 let from = self.bots[i].bot.pos;
@@ -590,7 +600,7 @@ impl AssembleAI for BfsAI {
         let mut ng_count = 0;
         while self.candidates.len() > 0 || self.is_all_bot_command_done() {
             // println!("All Candidate: {}", self.visited.len());
-            // :println!("Rest Candidate: {}", self.candidates.len());
+            // println!("Rest Candidate: {}", self.candidates.len());
             // 1 time step 実行
             for i in 0..self.bots.len() {
                 if self.bots[i].next_commands.len() != 0 {
