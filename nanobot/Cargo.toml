@@ -5,6 +5,7 @@ authors = ["qwerty <qwerty.knagira@gmail.com>"]
 
 [dependencies]
 getopts = "0.2"
+rand = "0.5"
 
 [lib]
 name = "nanobot_lib"

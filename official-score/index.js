@@ -40,13 +40,34 @@ async function sleep(delay) {
 
     // exec
     await page.click("#execTrace");
-    while (true) {
-        await sleep(3000);
+    for (var i = 0; ; i++) {
+        await sleep(2000);
         const stdout = await page.$("#stdout");
         const text = await (await stdout.getProperty("textContent")).jsonValue();
 
-        console.log(text);
         if (text.startsWith("Success::") || text.startsWith("Failure::")) {
+            var commandsRe = /Commands: *([0-9]+)/;
+            var energyRe = /Energy: *([0-9]+)/;
+            var m, commands, energy;
+            if ((m = commandsRe.exec(text)) !== null) {
+                commands = m[1];
+            } else {
+                commands = -1;
+            }
+            if ((m = energyRe.exec(text)) !== null) {
+                energy = m[1];
+            } else {
+                energy = -1;
+            }
+            console.log(JSON.stringify({
+                "commands": commands,
+                "energy": energy
+            }));
+            break;
+        }
+
+        if (i == 10) {
+            console.log("Timeout!");
             break;
         }
     }
