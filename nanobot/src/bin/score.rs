@@ -114,7 +114,7 @@ fn main() {
             println!("ClockTime: ?ms");
         }
         OutputFormat::Json => {
-            println!("{{\"commands\": {}, \"energy\": {}}}", trace.len(), state.get_energy());
+            println!("{{\"commands\":\"{}\",\"energy\":\"{}\"}}", trace.len(), state.get_energy());
         }
     }
 }
