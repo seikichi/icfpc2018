@@ -36,6 +36,7 @@ pub struct BfsAI {
     bots: Vec<BotState>,
     volatiles: HashSet<Position>,
     candidates: Vec<Position>,
+    visited: HashSet<Position>, // candidatesとして入ったことがあるやつのリスト
     trace: Vec<Command>,
 }
 
@@ -53,8 +54,12 @@ impl BfsAI {
             bots: vec![BotState::initial()],
             volatiles: volatiles,
             candidates: vec![],
+            visited: HashSet::new(),
             trace: vec![],
         }
+    }
+    fn is_all_bot_command_done(&self) -> bool {
+        self.bots.iter().any(|b| b.next_commands.len() > 0)
     }
     fn is_valid_coordinate(&self, p: &Position) -> bool {
         let r = self.target.matrix.len() as i32;
@@ -206,6 +211,26 @@ impl BfsAI {
             }
         }
     }
+    fn make_random_move_command(&mut self, from: &Position) -> Command {
+        'outer_loop: for _ in 0..5 {
+            let dir = self.rng.gen_range(0, 6);
+            let dist = self.rng.gen_range(1, 5);
+            let dx = [1, -1, 0, 0, 0, 0];
+            let dy = [0, 0, 1, -1, 0, 0];
+            let dz = [0, 0, 0, 0, 1, -1];
+            let llcd = LLCD::new(dist * dx[dir], dist * dy[dir], dist * dz[dir]);
+            if !self.is_safe_coordinate(&(*from + &llcd)) {
+                continue;
+            }
+            for p in Region(*from, *from + &llcd).iter() {
+                if p != *from && self.volatiles.contains(&p) {
+                    continue 'outer_loop;
+                }
+            }
+            return Command::SMove(llcd);
+        }
+        Command::Wait
+    }
     fn simulate_move(&self, from: &Position, command: &Command) -> Position {
         match command {
             Command::SMove(llcd) => *from + llcd,
@@ -299,10 +324,12 @@ impl BfsAI {
             if !self.is_valid_coordinate(next)
                 || self.current.voxel_at(*next) == Voxel::Full
                 || self.target.voxel_at(*next) == Voxel::Void
+                || self.visited.contains(next)
             {
                 continue;
             }
             self.candidates.push(*next);
+            self.visited.insert(*next);
         }
     }
     // bot_indexのnext_commandsの先頭に入っているCommandを実行する
@@ -382,12 +409,14 @@ impl AssembleAI for BfsAI {
                 let p = Position::new(x as i32, 0, z as i32);
                 if self.target.voxel_at(p) == Voxel::Full {
                     self.candidates.push(p);
+                    self.visited.insert(p);
                 }
             }
         }
         // TODO 分散
         // ブロック埋め
-        while self.candidates.len() > 0 {
+        while self.candidates.len() > 0 || self.is_all_bot_command_done() {
+            // println!("Rest Candidate: {}", self.candidates.len());
             // 1 time step 実行
             for i in 0..self.bots.len() {
                 if self.bots[i].next_commands.len() != 0 {
@@ -396,9 +425,11 @@ impl AssembleAI for BfsAI {
                 let from = self.bots[i].bot.pos;
                 let to = self.select_one_candidate(&from);
                 if to.is_none() {
-                    // TODO
-                    // random move
-                    unimplemented!();
+                    let commands = vec![self.make_random_move_command(&from)]
+                        .into_iter()
+                        .collect();
+                    self.set_volatiles(&from, &commands);
+                    self.bots[i].next_commands = commands;
                     continue;
                 }
                 match self.make_target_fill_command(&from, &to.unwrap()) {
@@ -425,6 +456,7 @@ impl AssembleAI for BfsAI {
             let mut commands = self.make_return_command().unwrap();
             self.trace.append(&mut commands);
         }
+        // println!("{} {:?}", self.trace.len(), self.trace);
         self.trace.clone()
     }
 }
@@ -582,6 +614,34 @@ fn make_setunset_volatiles_test() {
         assert_eq!(bfs_ai.volatiles.len(), 4);
         bfs_ai.unset_volatile(&Position::zero(), &command);
         assert_eq!(bfs_ai.volatiles.len(), 1);
+    }
+}
+
+#[test]
+fn make_random_move_command_test() {
+    let model = Model::initial(30);
+    let config = Config::new();
+    let mut bfs_ai = BfsAI::new(&config, &model, &model);
+    {
+        let c = bfs_ai.make_random_move_command(&Position::zero());
+        assert!(c != Command::Wait);
+        let c = bfs_ai.make_random_move_command(&Position::zero());
+        assert!(c != Command::Wait);
+        let c = bfs_ai.make_random_move_command(&Position::zero());
+        assert!(c != Command::Wait);
+        let c = bfs_ai.make_random_move_command(&Position::zero());
+        assert!(c != Command::Wait);
+        let c = bfs_ai.make_random_move_command(&Position::zero());
+        assert!(c != Command::Wait);
+        let c = bfs_ai.make_random_move_command(&Position::zero());
+        assert!(c != Command::Wait);
+    }
+    {
+        bfs_ai.volatiles.insert(Position::new(1, 0, 0));
+        bfs_ai.volatiles.insert(Position::new(0, 1, 0));
+        bfs_ai.volatiles.insert(Position::new(0, 0, 1));
+        let c = bfs_ai.make_random_move_command(&Position::zero());
+        assert!(c == Command::Wait);
     }
 }
 
