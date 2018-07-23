@@ -103,6 +103,7 @@ GOLD_AI=default
 
 GOLD_ASSEMBLER=default
 GOLD_DISASSEMBLER=default
+GOLD_DRY_RUN_MAX_RESOLUTION=30 (default)
 ...
 ",
         args[0]

@@ -11,7 +11,7 @@ pub struct Config {
 impl Config {
     pub fn new() -> Self {
         let dry_run_max_resolution = env::var("GOLD_DRY_RUN_MAX_RESOLUTION")
-            .unwrap_or(String::from("0"))
+            .unwrap_or(String::from("30"))
             .parse::<i32>()
             .unwrap_or(0);
 
