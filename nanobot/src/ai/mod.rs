@@ -1,6 +1,7 @@
 use super::common::*;
 use super::model::*;
 
+pub mod bfs;
 pub mod builder;
 pub mod config;
 pub mod grid_fission;
