@@ -696,7 +696,13 @@ impl AssembleAI for BfsAI {
         }
         // (0, 0, 0)に戻る
         {
-            let mut commands = self.make_return_command().unwrap();
+            let mut commands = match self.make_return_command() {
+                None => {
+                    println!("Give Up return!");
+                    return vec![];
+                }
+                Some(commands) => commands,
+            };
             self.trace.append(&mut commands);
         }
         // println!("{} {:?}", self.trace.len(), self.trace);
