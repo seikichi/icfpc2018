@@ -42,13 +42,16 @@ pub struct BfsAI {
 impl BfsAI {
     #[allow(deprecated)]
     pub fn new(_config: &Config, source: &Model, target: &Model) -> Self {
+        let mut volatiles = HashSet::new();
+        volatiles.insert(Position::zero());
+        // TODO sourceでFullなのをvolatilesに追加する
         BfsAI {
             rng: XorShiftRng::new_unseeded(),
             state: State::initial_with_model(source),
             current: source.clone(),
             target: target.clone(),
             bots: vec![BotState::initial()],
-            volatiles: HashSet::new(),
+            volatiles: volatiles,
             candidates: vec![],
             trace: vec![],
         }
@@ -71,10 +74,13 @@ impl BfsAI {
         self.is_valid_coordinate(p) && !self.volatiles.contains(p)
     }
     // candidateから1つ選択
-    fn select_one_candidate(&mut self, from: &Position) -> Position {
+    fn select_one_candidate(&mut self, from: &Position) -> Option<Position> {
         let mut target = self.candidates.len();
         let mut best = 1 << 30;
         for (i, c) in self.candidates.iter().enumerate() {
+            if self.volatiles.contains(c) {
+                continue;
+            }
             // TODO candidateの選択をもう少しましにする
             // groundからの距離が近いやつをなるべく優先する
             // 暫定でyが小さいやつを優先させる
@@ -86,17 +92,20 @@ impl BfsAI {
                 best = score;
             }
         }
-        assert!(target != self.candidates.len());
+        if target == self.candidates.len() {
+            return None;
+        }
         let ret = self.candidates[target];
         self.candidates.remove(target);
-        ret
+        Some(ret)
     }
     // posからvolatileしないncdの位置を全部返す
-    fn pos_ncd_all(&self, pos: &Position) -> Vec<Position> {
+    // ただしfromはvolatileしていても許可
+    fn pos_ncd_all(&self, from: &Position, to: &Position) -> Vec<Position> {
         let mut poss = vec![];
         for ncd in all_ncd().iter() {
-            let new_c = *pos + ncd;
-            if !self.is_safe_coordinate(&new_c) {
+            let new_c = *to + ncd;
+            if new_c != *from && !self.is_safe_coordinate(&new_c) {
                 continue;
             }
             poss.push(new_c);
@@ -107,9 +116,9 @@ impl BfsAI {
     fn pos_smove_all(&self, pos: &Position) -> Vec<(Position, Command)> {
         let mut ret = vec![];
         for dir in 0..6 {
-            let dx = [1, -1, 0, 0, 0, 0];
-            let dy = [0, 0, 1, -1, 0, 0];
-            let dz = [1, 0, 0, 0, 1, -1];
+            let dx = [0, 0, 1, -1, 0, 0];
+            let dy = [1, -1, 0, 0, 0, 0];
+            let dz = [0, 0, 0, 0, 1, -1];
             for dist in 1..15 + 1 {
                 let llcd = LLCD::new(dist * dx[dir], dist * dy[dir], dist * dz[dir]);
                 let npos = *pos + &llcd;
@@ -126,10 +135,10 @@ impl BfsAI {
     //     // TODO
     //     unimplemented!();
     // }
-    // SMove・LMoveの系列をbfsで作って移動してfilする
+    // SMove・LMoveの系列をbfsで作って移動してfillする
     fn make_target_fill_command(&self, from: &Position, to: &Position) -> Option<Vec<Command>> {
         let mut ret = vec![];
-        let tos = self.pos_ncd_all(to);
+        let tos = self.pos_ncd_all(from, to);
         let (nto, mut commands) = match self.make_move_any_command(from, &tos) {
             None => {
                 return None;
@@ -153,12 +162,12 @@ impl BfsAI {
         que.push_back(*from);
         let mut parents = HashMap::<Position, (Position, Command)>::new(); // visit + 経路復元用
         parents.insert(*from, (*from, Command::Wait));
-        while let Some(f) = que.pop_back() {
+        while let Some(f) = que.pop_front() {
             if tos.contains(&f) {
                 // 経路復元してreverseで正順にしてコマンドの系列を返す
                 let mut ret = vec![];
                 let mut next = f;
-                while next != f {
+                while next != *from {
                     let (prev, command) = parents[&next];
                     ret.push(command);
                     next = prev;
@@ -189,7 +198,7 @@ impl BfsAI {
     fn make_return_command(&self) -> Option<Vec<Command>> {
         assert_eq!(self.bots.len(), 1);
         let from = self.bots[0].bot.pos;
-        match self.make_move_any_command(&from, &vec![Position::new(0, 0, 0)]) {
+        match self.make_move_any_command(&from, &vec![Position::zero()]) {
             None => None,
             Some((_, mut commands)) => {
                 commands.push(Command::Halt);
@@ -276,6 +285,9 @@ impl BfsAI {
                 unimplemented!();
             }
         };
+        // println!("{:?} {:?}", from, command);
+        // println!("{:?}", self.volatiles);
+        // println!("{:?}", ps);
         for p in ps.iter() {
             assert!(self.volatiles.contains(p));
             self.volatiles.remove(p);
@@ -284,19 +296,21 @@ impl BfsAI {
     // posの位置ブロックがFillされたときに周りのVoxelでまだcandidateに入ってないのを入れる
     fn update_full_candidate(&mut self, pos: &Position) {
         for next in adjacent(*pos).iter() {
-            if self.current.voxel_at(*next) == Voxel::Full
+            if !self.is_valid_coordinate(next)
+                || self.current.voxel_at(*next) == Voxel::Full
                 || self.target.voxel_at(*next) == Voxel::Void
             {
                 continue;
             }
             self.candidates.push(*next);
         }
-        unimplemented!();
     }
     // bot_indexのnext_commandsの先頭に入っているCommandを実行する
     fn do_command(&mut self, bot_index: usize) {
         let from = self.bots[bot_index].bot.pos;
-        let command = self.bots[bot_index].next_commands[0];
+        // println!("Commands: {:?}", self.bots[bot_index].next_commands);
+        let command = self.bots[bot_index].next_commands.pop_front().unwrap();
+        // println!("Do Command: {} {:?} {:?}", bot_index, from, command);
         self.unset_volatile(&from, &command);
         match command {
             Command::Halt => {
@@ -345,7 +359,7 @@ impl BfsAI {
         // simulatorに渡すコマンド列を作る
         let mut commands = vec![];
         for bot in &mut self.bots {
-            commands.push((bot.bot.bid, bot.next_commands.pop_front().unwrap()));
+            commands.push((bot.bot.bid, bot.next_commands[0]));
         }
         commands.sort();
         let mut commands = commands.iter().map(|c| c.1).collect::<Vec<_>>();
@@ -381,7 +395,13 @@ impl AssembleAI for BfsAI {
                 }
                 let from = self.bots[i].bot.pos;
                 let to = self.select_one_candidate(&from);
-                match self.make_target_fill_command(&from, &to) {
+                if to.is_none() {
+                    // TODO
+                    // random move
+                    unimplemented!();
+                    continue;
+                }
+                match self.make_target_fill_command(&from, &to.unwrap()) {
                     None => {
                         // TODO
                         assert!(false);
@@ -390,6 +410,7 @@ impl AssembleAI for BfsAI {
                     }
                     Some(commands) => {
                         let commands = commands.into_iter().collect();
+                        // println!("{:?}", commands);
                         self.set_volatiles(&from, &commands);
                         self.bots[i].next_commands = commands;
                     }
@@ -405,5 +426,209 @@ impl AssembleAI for BfsAI {
             self.trace.append(&mut commands);
         }
         self.trace.clone()
+    }
+}
+
+#[test]
+fn select_one_candidate_test() {
+    let model = Model::initial(100);
+    let config = Config::new();
+    {
+        let mut bfs_ai = BfsAI::new(&config, &model, &model);
+        let c = Position::new(1, 1, 1);
+        bfs_ai.candidates.push(c);
+        let p = bfs_ai.select_one_candidate(&Position::zero()).unwrap();
+        assert_eq!(p, c);
+    }
+    {
+        let mut bfs_ai = BfsAI::new(&config, &model, &model);
+        let c = Position::new(1, 1, 1);
+        bfs_ai.candidates.push(c);
+        bfs_ai.volatiles.insert(c);
+        let result = bfs_ai.select_one_candidate(&c);
+        assert!(result.is_none());
+    }
+}
+
+#[test]
+fn pos_ncd_all_test() {
+    let model = Model::initial(100);
+    let config = Config::new();
+    let mut bfs_ai = BfsAI::new(&config, &model, &model);
+    {
+        let poss = bfs_ai.pos_ncd_all(&Position::zero(), &Position::new(1, 1, 1));
+        assert_eq!(poss.len(), 18);
+    }
+    {
+        let poss = bfs_ai.pos_ncd_all(&Position::zero(), &Position::zero());
+        assert_eq!(poss.len(), 6);
+    }
+    {
+        let poss = bfs_ai.pos_ncd_all(&Position::zero(), &Position::new(2, 0, 2));
+        assert_eq!(poss.len(), 13);
+    }
+    {
+        let poss = bfs_ai.pos_ncd_all(&Position::new(30, 30, 30), &Position::new(1, 0, 1));
+        assert_eq!(poss.len(), 12);
+    }
+    {
+        let poss = bfs_ai.pos_ncd_all(&Position::zero(), &Position::new(1, 0, 1));
+        assert_eq!(poss.len(), 13);
+    }
+}
+#[test]
+fn pos_smove_all_test() {
+    let model = Model::initial(100);
+    let config = Config::new();
+    let mut bfs_ai = BfsAI::new(&config, &model, &model);
+    {
+        let llcds = bfs_ai.pos_smove_all(&Position::new(30, 30, 30));
+        assert_eq!(llcds.len(), 90);
+    }
+    {
+        let llcds = bfs_ai.pos_smove_all(&Position::new(1, 1, 1));
+        assert_eq!(llcds.len(), 48);
+    }
+    {
+        let llcds = bfs_ai.pos_smove_all(&Position::new(98, 98, 98));
+        assert_eq!(llcds.len(), 48);
+    }
+    {
+        bfs_ai.volatiles.insert(Position::new(28, 30, 30));
+        let llcds = bfs_ai.pos_smove_all(&Position::new(30, 30, 30));
+        assert_eq!(llcds.len(), 76);
+    }
+}
+
+#[test]
+fn make_fill_command_test() {
+    let model = Model::initial(3);
+    let config = Config::new();
+    let bfs_ai = BfsAI::new(&config, &model, &model);
+    {
+        let command = bfs_ai.make_fill_command(&Position::zero(), &Position::new(1, 0, 1));
+        assert_eq!(command.len(), 1);
+        assert_eq!(command[0], Command::Fill(NCD::new(1, 0, 1)));
+    }
+}
+
+#[test]
+fn make_move_any_command_test() {
+    let model = Model::initial(10);
+    let config = Config::new();
+    let mut bfs_ai = BfsAI::new(&config, &model, &model);
+    {
+        let (pos, commands) = bfs_ai
+            .make_move_any_command(&Position::zero(), &vec![Position::new(0, 0, 0)])
+            .unwrap();
+        assert_eq!(pos, Position::zero());
+        assert_eq!(commands.len(), 0);
+    }
+    {
+        let (pos, commands) = bfs_ai
+            .make_move_any_command(
+                &Position::zero(),
+                &vec![Position::new(0, 0, 0), Position::new(3, 3, 3)],
+            )
+            .unwrap();
+        assert_eq!(pos, Position::zero());
+        assert_eq!(commands.len(), 0);
+    }
+    {
+        let to = Position::new(3, 3, 3);
+        let (pos, commands) = bfs_ai
+            .make_move_any_command(&Position::zero(), &vec![to])
+            .unwrap();
+        assert_eq!(pos, to);
+        assert_eq!(commands.len(), 3);
+    }
+    {
+        let to = Position::new(3, 3, 3);
+        for p in adjacent(to).iter() {
+            bfs_ai.volatiles.insert(*p);
+        }
+        let result = bfs_ai.make_move_any_command(&Position::zero(), &vec![to]);
+        assert!(result.is_none());
+    }
+}
+
+#[test]
+fn make_target_fill_command_test() {
+    let model = Model::initial(10);
+    let config = Config::new();
+    let mut bfs_ai = BfsAI::new(&config, &model, &model);
+    {
+        let commands = bfs_ai
+            .make_target_fill_command(&Position::zero(), &Position::new(1, 0, 1))
+            .unwrap();
+        assert_eq!(commands.len(), 1);
+    }
+    {
+        let commands = bfs_ai
+            .make_target_fill_command(&Position::zero(), &Position::new(1, 1, 1))
+            .unwrap();
+        assert_eq!(commands.len(), 2);
+    }
+}
+
+#[test]
+fn make_setunset_volatiles_test() {
+    let model = Model::initial(30);
+    let config = Config::new();
+    let mut bfs_ai = BfsAI::new(&config, &model, &model);
+    {
+        let command = Command::SMove(LLCD::new(3, 0, 0));
+        bfs_ai.set_volatile(&Position::zero(), &command);
+        assert_eq!(bfs_ai.volatiles.len(), 4);
+        bfs_ai.unset_volatile(&Position::zero(), &command);
+        assert_eq!(bfs_ai.volatiles.len(), 1);
+    }
+}
+
+#[test]
+fn do_command_test() {
+    let model = Model::initial(30);
+    let config = Config::new();
+    {
+        let mut bfs_ai = BfsAI::new(&config, &model, &model);
+        let mut commands = VecDeque::new();
+        commands.push_back(Command::SMove(LLCD::new(7, 0, 0)));
+        commands.push_back(Command::SMove(LLCD::new(0, 0, 7)));
+        commands.push_back(Command::Fill(NCD::new(1, 0, 1)));
+        let from = bfs_ai.bots[0].bot.pos;
+        bfs_ai.set_volatiles(&from, &commands);
+        assert_eq!(bfs_ai.volatiles.len(), 1 + 7 + 7 + 1);
+        bfs_ai.bots[0].next_commands = commands;
+        bfs_ai.do_command(0);
+        assert_eq!(bfs_ai.bots[0].bot.pos, Position::new(7, 0, 0));
+        assert_eq!(bfs_ai.bots[0].next_commands.len(), 2);
+        assert_eq!(bfs_ai.volatiles.len(), 1 + 7 + 1);
+        bfs_ai.do_command(0);
+        assert_eq!(bfs_ai.bots[0].bot.pos, Position::new(7, 0, 7));
+        assert_eq!(bfs_ai.bots[0].next_commands.len(), 1);
+        assert_eq!(bfs_ai.volatiles.len(), 1 + 1);
+        bfs_ai.do_command(0);
+        assert_eq!(bfs_ai.bots[0].bot.pos, Position::new(7, 0, 7));
+        assert_eq!(bfs_ai.bots[0].next_commands.len(), 0);
+        assert_eq!(bfs_ai.current.voxel_at(Position::new(8, 0, 8)), Voxel::Full);
+        assert_eq!(bfs_ai.volatiles.len(), 1 + 1);
+
+        // invalid movement
+        // let mut commands = VecDeque::new();
+        // commands.push_back(Command::SMove(LLCD::new(1, 0, 0)));
+        // commands.push_back(Command::Fill(NCD::new(-1, 0, 0)));
+        // let from = bfs_ai.bots[0].bot.pos;
+        // bfs_ai.set_volatiles(&from, &commands);
+        // assert_eq!(bfs_ai.volatiles.len(), 2 + 1 + 1);
+        // bfs_ai.bots[0].next_commands = commands;
+        // bfs_ai.do_command(0);
+        // assert_eq!(bfs_ai.bots[0].bot.pos, Position::new(8, 0, 7));
+        // assert_eq!(bfs_ai.bots[0].next_commands.len(), 1);
+        // assert_eq!(bfs_ai.volatiles.len(), 2 + 1);
+        // bfs_ai.do_command(0);
+        // assert_eq!(bfs_ai.bots[0].bot.pos, Position::new(8, 0, 7));
+        // assert_eq!(bfs_ai.bots[0].next_commands.len(), 0);
+        // assert_eq!(bfs_ai.current.voxel_at(Position::new(7, 0, 7)), Voxel::Full);
+        // assert_eq!(bfs_ai.volatiles.len(), 2 + 1);
     }
 }
