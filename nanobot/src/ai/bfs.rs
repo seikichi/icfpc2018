@@ -659,8 +659,10 @@ impl AssembleAI for BfsAI {
                 return vec![];
             }
             for s_index in 0..self.bots.len() {
-                let from = self.bots[s_index].bot.pos;
-                self.make_fusions_ncd_command(&from, s_index);
+                if self.bots[s_index].next_commands.len() == 0 {
+                    let from = self.bots[s_index].bot.pos;
+                    self.make_fusions_ncd_command(&from, s_index);
+                }
             }
             for s_index in 0..self.bots.len() {
                 if self.bots[s_index].next_commands.len() == 0 {
