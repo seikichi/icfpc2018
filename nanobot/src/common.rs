@@ -7,6 +7,7 @@ use std::fs;
 use std::io::Read;
 use std::io::Write;
 use std::ops::Add;
+use std::ops::Sub;
 use std::path::Path;
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug)]
@@ -588,6 +589,18 @@ impl<'a> Add<&'a CD> for Position {
             x: self.x + other.x(),
             y: self.y + other.y(),
             z: self.z + other.z(),
+        }
+    }
+}
+
+impl<'a> Sub<&'a CD> for Position {
+    type Output = Position;
+
+    fn sub(self, other: &'a CD) -> Position {
+        Position {
+            x: self.x - other.x(),
+            y: self.y - other.y(),
+            z: self.z - other.z(),
         }
     }
 }
