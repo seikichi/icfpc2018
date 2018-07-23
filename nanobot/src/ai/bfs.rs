@@ -7,6 +7,7 @@ use ai::AssembleAI;
 use common::*;
 use model::*;
 use state::State;
+use std::cmp::min;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
@@ -118,14 +119,16 @@ impl BfsAI {
         poss
     }
     // posからSMoveで移動可能な位置とそのCommandを返す
-    fn pos_smove_all(&self, pos: &Position) -> Vec<(Position, Command)> {
+    fn pos_smove_all(&self, pos: &Position, max_dist: i32) -> Vec<(Position, Command)> {
+        assert!(max_dist >= 1);
+        let max_dist = min(max_dist, 15);
         let mut ret = vec![];
         for dir in 0..6 {
             // yが高いほうが優先
             let dy = [1, 0, 0, 0, 0, -1];
             let dx = [0, 1, -1, 0, 0, 0];
             let dz = [0, 0, 0, 1, -1, 0];
-            for dist in 1..15 + 1 {
+            for dist in 1..max_dist + 1 {
                 let llcd = LLCD::new(dist * dx[dir], dist * dy[dir], dist * dz[dir]);
                 let npos = *pos + &llcd;
                 if !self.is_safe_coordinate(&npos) {
@@ -168,6 +171,10 @@ impl BfsAI {
         que.push_back(*from);
         let mut parents = HashMap::<Position, (Position, Command)>::new(); // visit + 経路復元用
         parents.insert(*from, (*from, Command::Wait));
+        let mut max_dist = 15;
+        for to in tos.iter() {
+            max_dist = min(max_dist, (*from - to).manhattan_length());
+        }
         while let Some(f) = que.pop_front() {
             if tos.contains(&f) {
                 // 経路復元してreverseで正順にしてコマンドの系列を返す
@@ -182,7 +189,7 @@ impl BfsAI {
                 return Some((f, ret));
             }
             // TODO lmoveも追加する
-            let next = self.pos_smove_all(&f);
+            let next = self.pos_smove_all(&f, max_dist);
             for &(t, command) in next.iter() {
                 if parents.contains_key(&t) {
                     continue;
