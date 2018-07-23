@@ -3,6 +3,7 @@ use ai::config::Config;
 use ai::grid_fission::GridFissionAI;
 use ai::naive_reassemble::NaiveReassembleAI;
 use ai::void::VoidAI;
+use ai::void_assemble::VoidAssembleAI;
 use ai::AssembleAI;
 use ai::DisassembleAI;
 use ai::ReassembleAI;
@@ -15,6 +16,7 @@ pub fn build_assembler(name: &String, config: &Config, target: &Model) -> Box<As
     let source = Model::initial(r);
     match name.as_str() {
         "default" => Box::new(GridFissionAI::new(config)),
+        "kichi" => Box::new(VoidAssembleAI::new(config)),
         "bfs" => Box::new(BfsAI::new(config, &source, &target)),
         _ => {
             eprintln!("failed to build assembler AI (name = {})", name);
