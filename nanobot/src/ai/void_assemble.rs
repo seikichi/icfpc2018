@@ -29,10 +29,6 @@ impl AssembleAI for VoidAssembleAI {
             }
         };
         let r = target.matrix.len();
-        let mut state = State::initial(r);
-
-        let mut source = vec![vec![vec![Voxel::Void; r]; r]; r];
-        let mut source = Model { matrix: source };
 
         let x_size = (bounding.max_x - bounding.min_x + 1) as usize;
         let z_size = (bounding.max_z - bounding.min_z + 1) as usize;
@@ -44,19 +40,16 @@ impl AssembleAI for VoidAssembleAI {
 
         for m in commands.iter() {
             let v = vec![m.clone()];
-            state.update_time_step(&v[..]).expect("failed to move");
         }
 
         for v in generate_devide_commands((x_size, z_size), (xsplit, 1)).into_iter() {
-            state.update_time_step(&v[..]).expect("failed to devide");
             commands.extend(v);
         }
 
-        let mut commands_list: Vec<Vec<Command>> = vec![];
-
+        let mut fill_commands_list: Vec<Vec<Command>> = vec![];
+        let mut void_commands_list: Vec<Vec<Command>> = vec![];
         let x_width_list = calc_width_list(x_size, xsplit);
 
-        // up
         for i in 0..xsplit {
             let mut x = bounding.min_x;
             for j in 0..i {
@@ -67,127 +60,123 @@ impl AssembleAI for VoidAssembleAI {
                 Position::new(x, 0, bounding.min_z),
                 Position::new(x + x_width_list[i] - 1, bounding.max_y, bounding.max_z),
             );
-            commands_list.push(generate_fill_commands(
-                target,
-                &initial,
-                &region,
-                &mut source,
-            ));
+            let (fill, void) = generate_fill_and_void_commands(target, &initial, &region);
+            fill_commands_list.push(fill);
+            void_commands_list.push(void);
         }
-        let mut index = 0;
-        loop {
-            let mut all_wait = true;
-            let mut step = vec![];
-            for v in commands_list.iter() {
-                step.push(if index >= v.len() {
-                    Command::Wait
-                } else {
-                    all_wait = false;
-                    v[index].clone()
-                });
+        // fill
+        {
+            let mut index = 0;
+            loop {
+                let mut all_wait = true;
+                let mut step = vec![];
+                for v in fill_commands_list.iter() {
+                    step.push(if index >= v.len() {
+                        Command::Wait
+                    } else {
+                        all_wait = false;
+                        v[index].clone()
+                    });
+                }
+                if all_wait {
+                    break;
+                }
+                commands.extend(step);
+                index += 1;
             }
-            if all_wait {
-                break;
-            }
-
-            state.update_time_step(&step[..]).expect("failed to ground");
-            commands.extend(step);
-            index += 1;
         }
-        // down
-        // for i in 0..xsplit {
-        //     let mut x = bounding.min_x;
-        //     for j in 0..i {
-        //         x += x_width_list[j];
-        //     }
-        //     let initial = Position::new(x, 0, bounding.min_z);
-        //     let region = Region(
-        //         Position::new(x, 0, bounding.min_z),
-        //         Position::new(x + x_width_list[i] - 1, bounding.max_y, bounding.max_z),
-        //     );
-        //     commands_list.push(generate_void_commands(
-        //         target,
-        //         &initial,
-        //         &region,
-        //         &mut source,
-        //     ));
-        // }
-        // let mut index = 0;
-        // loop {
-        //     let mut all_wait = true;
-        //     let mut step = vec![];
-        //     for v in commands_list.iter() {
-        //         step.push(if index >= v.len() {
-        //             Command::Wait
-        //         } else {
-        //             all_wait = false;
-        //             v[index].clone()
-        //         });
-        //     }
-        //     if all_wait {
-        //         break;
-        //     }
-
-        //     state.update_time_step(&step[..]).expect("failed to ground");
-        //     commands.extend(step);
-        //     index += 1;
-        // }
-        // concur
-
+        // void
+        {
+            let mut index = 0;
+            loop {
+                let mut all_wait = true;
+                let mut step = vec![];
+                for v in void_commands_list.iter() {
+                    step.push(if index >= v.len() {
+                        Command::Wait
+                    } else {
+                        all_wait = false;
+                        v[index].clone()
+                    });
+                }
+                if all_wait {
+                    break;
+                }
+                commands.extend(step);
+                index += 1;
+            }
+        }
+        // each nanobot (x_i, min_z-1)
         // finish
         commands
     }
 }
 
-fn generate_fill_commands(
+fn generate_fill_and_void_commands(
     target: &Model,
     initial: &Position,
     region: &Region,
-    source: &mut Model,
-) -> Vec<Command> {
-    let path = find_fill_path(target, region, initial);
-    let mut cur = Position::new(initial.x, initial.y + 1, initial.z);
+) -> (Vec<Command>, Vec<Command>) {
+    let r = target.matrix.len();
+    let source = vec![vec![vec![Voxel::Void; r]; r]; r];
+    let mut source = Model { matrix: source };
+
+    // fill
     let mut commands = vec![
         Command::SMove(LLCD::new(0, 1, 0)),
         Command::Fill(NCD::new(0, -1, 0)),
     ];
-    source.matrix[cur.x as usize][(cur.y - 1) as usize][cur.z as usize] = Voxel::Full;
+    {
+        let path = find_fill_path(target, region, initial);
+        let mut cur = Position::new(initial.x, initial.y + 1, initial.z);
+        source.matrix[cur.x as usize][(cur.y - 1) as usize][cur.z as usize] = Voxel::Full;
 
-    for next in path.into_iter() {
-        let dx = next.x - cur.x;
-        let dy = next.y + 1 - cur.y;
-        let dz = next.z - cur.z;
-        for _ in 0..dx.abs() {
-            let d = if dx > 0 { 1 } else { -1 };
-            commands.extend(move_straight_x(d));
-            cur.x += d;
+        for next in path.into_iter() {
+            let dx = next.x - cur.x;
+            let dy = next.y + 1 - cur.y;
+            let dz = next.z - cur.z;
+            for _ in 0..dx.abs() {
+                let d = if dx > 0 { 1 } else { -1 };
+                commands.extend(move_straight_x(d));
+                cur.x += d;
 
-            if source.matrix[cur.x as usize][(cur.y - 1) as usize][cur.z as usize] == Voxel::Void {
-                commands.push(Command::Fill(NCD::new(0, -1, 0)));
-                source.matrix[cur.x as usize][(cur.y - 1) as usize][cur.z as usize] = Voxel::Full;
+                if source.matrix[cur.x as usize][(cur.y - 1) as usize][cur.z as usize]
+                    == Voxel::Void
+                {
+                    commands.push(Command::Fill(NCD::new(0, -1, 0)));
+                    source.matrix[cur.x as usize][(cur.y - 1) as usize][cur.z as usize] =
+                        Voxel::Full;
+                }
             }
-        }
-        for _ in 0..dz.abs() {
-            let d = if dz > 0 { 1 } else { -1 };
-            commands.extend(move_straight_z(d));
-            cur.z += d;
+            for _ in 0..dz.abs() {
+                let d = if dz > 0 { 1 } else { -1 };
+                commands.extend(move_straight_z(d));
+                cur.z += d;
 
-            if source.matrix[cur.x as usize][(cur.y - 1) as usize][cur.z as usize] == Voxel::Void {
-                commands.push(Command::Fill(NCD::new(0, -1, 0)));
-                source.matrix[cur.x as usize][(cur.y - 1) as usize][cur.z as usize] = Voxel::Full;
+                if source.matrix[cur.x as usize][(cur.y - 1) as usize][cur.z as usize]
+                    == Voxel::Void
+                {
+                    commands.push(Command::Fill(NCD::new(0, -1, 0)));
+                    source.matrix[cur.x as usize][(cur.y - 1) as usize][cur.z as usize] =
+                        Voxel::Full;
+                }
             }
-        }
-        for _ in 0..dy.abs() {
-            commands.extend(move_straight_y(1));
-            cur.y += 1;
+            for _ in 0..dy.abs() {
+                commands.extend(move_straight_y(1));
+                cur.y += 1;
 
-            if source.matrix[cur.x as usize][(cur.y - 1) as usize][cur.z as usize] == Voxel::Void {
-                commands.push(Command::Fill(NCD::new(0, -1, 0)));
-                source.matrix[cur.x as usize][(cur.y - 1) as usize][cur.z as usize] = Voxel::Full;
+                if source.matrix[cur.x as usize][(cur.y - 1) as usize][cur.z as usize]
+                    == Voxel::Void
+                {
+                    commands.push(Command::Fill(NCD::new(0, -1, 0)));
+                    source.matrix[cur.x as usize][(cur.y - 1) as usize][cur.z as usize] =
+                        Voxel::Full;
+                }
             }
         }
     }
-    commands
+    // void
+    (commands, vec![])
 }
 
 fn calc_width_list(size: usize, split: usize) -> Vec<i32> {
