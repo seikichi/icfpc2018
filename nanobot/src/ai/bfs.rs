@@ -92,7 +92,7 @@ impl BfsAI {
             // groundからの距離が近いやつをなるべく優先する
             // 暫定でyが小さいやつを優先させる
             let mut score = ((*from - c).manhattan_length() + 2) / 5 * 100;
-            score += c.y * 500;
+            score += c.y * 1000;
             score += self.rng.gen_range(0, 130);
             if score < best {
                 target = i;
@@ -149,7 +149,7 @@ impl BfsAI {
     fn make_target_fill_command(&mut self, from: &Position, to: &Position) -> Option<Vec<Command>> {
         let mut ret = vec![];
         assert!(!self.volatiles.contains(to));
-        self.volatiles.insert(*to);
+        self.volatiles.insert(*to); // Fillする位置を通るとassertに引っかかってしまうのでいったん除外する
         let tos = self.pos_ncd_all(from, to);
         let (nto, mut commands) = match self.make_move_any_command(from, &tos) {
             None => {
