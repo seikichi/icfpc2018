@@ -7,6 +7,8 @@ use ai::AssembleAI;
 use common::*;
 use model::*;
 use state::State;
+use std::cmp::min;
+use std::collections::BinaryHeap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
@@ -90,7 +92,7 @@ impl BfsAI {
             // groundからの距離が近いやつをなるべく優先する
             // 暫定でyが小さいやつを優先させる
             let mut score = ((*from - c).manhattan_length() + 2) / 5 * 100;
-            score += c.y * 200;
+            score += c.y * 1000;
             score += self.rng.gen_range(0, 130);
             if score < best {
                 target = i;
@@ -118,13 +120,16 @@ impl BfsAI {
         poss
     }
     // posからSMoveで移動可能な位置とそのCommandを返す
-    fn pos_smove_all(&self, pos: &Position) -> Vec<(Position, Command)> {
+    fn pos_smove_all(&self, pos: &Position, max_dist: i32) -> Vec<(Position, Command)> {
+        assert!(max_dist >= 1);
+        let max_dist = min(max_dist, 15);
         let mut ret = vec![];
         for dir in 0..6 {
-            let dx = [0, 0, 1, -1, 0, 0];
-            let dy = [1, -1, 0, 0, 0, 0];
-            let dz = [0, 0, 0, 0, 1, -1];
-            for dist in 1..15 + 1 {
+            // yが高いほうが優先
+            let dy = [1, 0, 0, 0, 0, -1];
+            let dx = [0, 1, -1, 0, 0, 0];
+            let dz = [0, 0, 0, 1, -1, 0];
+            for dist in 1..max_dist + 1 {
                 let llcd = LLCD::new(dist * dx[dir], dist * dy[dir], dist * dz[dir]);
                 let npos = *pos + &llcd;
                 if !self.is_safe_coordinate(&npos) {
@@ -141,15 +146,19 @@ impl BfsAI {
     //     unimplemented!();
     // }
     // SMove・LMoveの系列をbfsで作って移動してfillする
-    fn make_target_fill_command(&self, from: &Position, to: &Position) -> Option<Vec<Command>> {
+    fn make_target_fill_command(&mut self, from: &Position, to: &Position) -> Option<Vec<Command>> {
         let mut ret = vec![];
+        assert!(!self.volatiles.contains(to));
+        self.volatiles.insert(*to); // Fillする位置を通るとassertに引っかかってしまうのでいったん除外する
         let tos = self.pos_ncd_all(from, to);
         let (nto, mut commands) = match self.make_move_any_command(from, &tos) {
             None => {
+                self.volatiles.remove(to);
                 return None;
             }
             Some(v) => v,
         };
+        self.volatiles.remove(to);
         ret.append(&mut commands);
         let mut commands = self.make_fill_command(&nto, to);
         ret.append(&mut commands);
@@ -162,12 +171,17 @@ impl BfsAI {
         from: &Position,
         tos: &Vec<Position>,
     ) -> Option<(Position, Vec<Command>)> {
+        let tos0 = tos[0];
         let tos = tos.iter().map(|p| *p).collect::<HashSet<Position>>();
-        let mut que = VecDeque::<Position>::new();
-        que.push_back(*from);
+        let mut que = BinaryHeap::<(i32, Position, i32)>::new();
+        que.push((0, *from, 0));
         let mut parents = HashMap::<Position, (Position, Command)>::new(); // visit + 経路復元用
         parents.insert(*from, (*from, Command::Wait));
-        while let Some(f) = que.pop_front() {
+        let mut max_dist = 15;
+        for to in tos.iter() {
+            max_dist = min(max_dist, (*from - to).manhattan_length());
+        }
+        while let Some((_score, f, cnt)) = que.pop() {
             if tos.contains(&f) {
                 // 経路復元してreverseで正順にしてコマンドの系列を返す
                 let mut ret = vec![];
@@ -181,17 +195,28 @@ impl BfsAI {
                 return Some((f, ret));
             }
             // TODO lmoveも追加する
-            let next = self.pos_smove_all(&f);
+            let next = self.pos_smove_all(&f, max_dist);
             for &(t, command) in next.iter() {
                 if parents.contains_key(&t) {
                     continue;
                 }
                 parents.insert(t, (f, command));
-                que.push_back(t);
+                let score = self.calc_astar_score(cnt + 1, &t, &tos0);
+                que.push((score, t, cnt + 1));
             }
         }
         // どこにもたどり着けなかった場合
         None
+    }
+    // tos[0]を基準にする
+    fn calc_astar_score(&self, cnt: i32, from: &Position, to: &Position) -> i32 {
+        let mut score = cnt * 5;
+        let d = (*from - to).manhattan_length() / 2;
+        score += d;
+        if from.y <= to.y {
+            score += 2;
+        }
+        -score
     }
     // fromからtoをfillするコマンドを発行
     // fromとtoはncdの距離
@@ -275,6 +300,9 @@ impl BfsAI {
             }
             Command::GVoid(_, _) => vec![],
         };
+        // println!("{:?} {:?}", from, command);
+        // println!("{:?}", self.volatiles);
+        // println!("{:?}", ps);
         for p in ps.iter() {
             assert!(!self.volatiles.contains(p));
             self.volatiles.insert(*p);
@@ -416,6 +444,7 @@ impl AssembleAI for BfsAI {
         // TODO 分散
         // ブロック埋め
         while self.candidates.len() > 0 || self.is_all_bot_command_done() {
+            // println!("All Candidate: {}", self.visited.len());
             // println!("Rest Candidate: {}", self.candidates.len());
             // 1 time step 実行
             for i in 0..self.bots.len() {
@@ -435,6 +464,7 @@ impl AssembleAI for BfsAI {
                 match self.make_target_fill_command(&from, &to.unwrap()) {
                     None => {
                         // TODO
+                        // return self.trace.clone();
                         assert!(false);
                         // TODO candidateを元に戻すか保持する
                         self.bots[i].nop();
@@ -514,20 +544,20 @@ fn pos_smove_all_test() {
     let config = Config::new();
     let mut bfs_ai = BfsAI::new(&config, &model, &model);
     {
-        let llcds = bfs_ai.pos_smove_all(&Position::new(30, 30, 30));
+        let llcds = bfs_ai.pos_smove_all(&Position::new(30, 30, 30), 15);
         assert_eq!(llcds.len(), 90);
     }
     {
-        let llcds = bfs_ai.pos_smove_all(&Position::new(1, 1, 1));
+        let llcds = bfs_ai.pos_smove_all(&Position::new(1, 1, 1), 15);
         assert_eq!(llcds.len(), 48);
     }
     {
-        let llcds = bfs_ai.pos_smove_all(&Position::new(98, 98, 98));
+        let llcds = bfs_ai.pos_smove_all(&Position::new(98, 98, 98), 15);
         assert_eq!(llcds.len(), 48);
     }
     {
         bfs_ai.volatiles.insert(Position::new(28, 30, 30));
-        let llcds = bfs_ai.pos_smove_all(&Position::new(30, 30, 30));
+        let llcds = bfs_ai.pos_smove_all(&Position::new(30, 30, 30), 15);
         assert_eq!(llcds.len(), 76);
     }
 }
