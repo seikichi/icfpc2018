@@ -28,8 +28,6 @@ impl AssembleAI for VoidAssembleAI {
                 return vec![Command::Halt];
             }
         };
-        let r = target.matrix.len();
-
         let x_size = (bounding.max_x - bounding.min_x + 1) as usize;
         let z_size = (bounding.max_z - bounding.min_z + 1) as usize;
         let xsplit = min(x_size, 20);
@@ -85,6 +83,9 @@ impl AssembleAI for VoidAssembleAI {
                 index += 1;
             }
         }
+        let mut high = vec![Command::Flip];
+        high.extend(repeat(Command::Wait).take(fill_commands_list.len() - 1));
+        commands.extend(high);
         // void
         {
             let mut index = 0;
@@ -106,7 +107,19 @@ impl AssembleAI for VoidAssembleAI {
                 index += 1;
             }
         }
-        // each nanobot (x_i, min_z-1)
+        let mut low = vec![Command::Flip];
+        low.extend(repeat(Command::Wait).take(fill_commands_list.len() - 1));
+        commands.extend(low);
+        // each nanobot (x_i, 0, min_z-1)
+        commands.extend(
+            generate_concur_commands((x_size, z_size), (xsplit, 1))
+                .iter()
+                .flat_map(|v| v.iter()),
+        );
+        // back to origin
+        commands.extend(move_straight_x(-bounding.min_x));
+        commands.extend(move_straight_z(-(bounding.min_z - 1)));
+        commands.push(Command::Halt);
         // finish
         commands
     }
@@ -120,6 +133,8 @@ fn generate_fill_and_void_commands(
     let r = target.matrix.len();
     let source = vec![vec![vec![Voxel::Void; r]; r]; r];
     let mut source = Model { matrix: source };
+    let goal = Position::new(region.0.x, 0, region.0.z - 1);
+    let mut cur = Position::new(initial.x, initial.y, initial.z);
 
     // fill
     let mut commands = vec![
@@ -127,8 +142,8 @@ fn generate_fill_and_void_commands(
         Command::Fill(NCD::new(0, -1, 0)),
     ];
     {
+        cur.y += 1;
         let path = find_fill_path(target, region, initial);
-        let mut cur = Position::new(initial.x, initial.y + 1, initial.z);
         source.matrix[cur.x as usize][(cur.y - 1) as usize][cur.z as usize] = Voxel::Full;
 
         for next in path.into_iter() {
@@ -142,6 +157,9 @@ fn generate_fill_and_void_commands(
 
                 if source.matrix[cur.x as usize][(cur.y - 1) as usize][cur.z as usize]
                     == Voxel::Void
+                    && (cur.y != 1
+                        || target.matrix[cur.x as usize][(cur.y - 1) as usize][cur.z as usize]
+                            == Voxel::Full)
                 {
                     commands.push(Command::Fill(NCD::new(0, -1, 0)));
                     source.matrix[cur.x as usize][(cur.y - 1) as usize][cur.z as usize] =
@@ -155,6 +173,9 @@ fn generate_fill_and_void_commands(
 
                 if source.matrix[cur.x as usize][(cur.y - 1) as usize][cur.z as usize]
                     == Voxel::Void
+                    && (cur.y != 1
+                        || target.matrix[cur.x as usize][(cur.y - 1) as usize][cur.z as usize]
+                            == Voxel::Full)
                 {
                     commands.push(Command::Fill(NCD::new(0, -1, 0)));
                     source.matrix[cur.x as usize][(cur.y - 1) as usize][cur.z as usize] =
@@ -162,8 +183,19 @@ fn generate_fill_and_void_commands(
                 }
             }
             for _ in 0..dy.abs() {
-                commands.extend(move_straight_y(1));
-                cur.y += 1;
+                let d = if dy > 0 { 1 } else { -1 };
+
+                if cur.y == 1
+                    && source.matrix[cur.x as usize][(cur.y - 1) as usize][cur.z as usize]
+                        == Voxel::Void
+                {
+                    commands.push(Command::Fill(NCD::new(0, -1, 0)));
+                    source.matrix[cur.x as usize][(cur.y - 1) as usize][cur.z as usize] =
+                        Voxel::Full;
+                }
+
+                commands.extend(move_straight_y(d));
+                cur.y += d;
 
                 if source.matrix[cur.x as usize][(cur.y - 1) as usize][cur.z as usize]
                     == Voxel::Void
@@ -176,7 +208,84 @@ fn generate_fill_and_void_commands(
         }
     }
     // void
-    (commands, vec![])
+    let mut void_commands = vec![];
+    {
+        let mut path = find_void_path(&source, target, region, &cur);
+        path.push(goal);
+
+        for next in path.into_iter() {
+            let dx = next.x - cur.x;
+            let dy = next.y - cur.y;
+            let dz = next.z - cur.z;
+            for _ in 0..dx.abs() {
+                let d = if dx > 0 { 1 } else { -1 };
+                // Void if next is Full
+                if source.matrix[(cur.x + d) as usize][cur.y as usize][cur.z as usize]
+                    == Voxel::Full
+                {
+                    void_commands.push(Command::Void(NCD::new(d, 0, 0)));
+                    source.matrix[(cur.x + d) as usize][cur.y as usize][cur.z as usize] =
+                        Voxel::Void
+                }
+                // SMove
+                void_commands.push(Command::SMove(LLCD::new(d, 0, 0)));
+                cur.x += d;
+                // Fill if should be Full but Void
+                if target.matrix[(cur.x - d) as usize][cur.y as usize][cur.z as usize]
+                    == Voxel::Full
+                {
+                    void_commands.push(Command::Fill(NCD::new(-d, 0, 0)));
+                    source.matrix[(cur.x - d) as usize][cur.y as usize][cur.z as usize] =
+                        Voxel::Full;
+                }
+            }
+            for _ in 0..dy.abs() {
+                let d = if dy > 0 { 1 } else { -1 };
+                // Void if next is Full
+                if source.matrix[cur.x as usize][(cur.y + d) as usize][cur.z as usize]
+                    == Voxel::Full
+                {
+                    void_commands.push(Command::Void(NCD::new(0, d, 0)));
+                    source.matrix[cur.x as usize][(cur.y + d) as usize][cur.z as usize] =
+                        Voxel::Void
+                }
+                // SMove
+                void_commands.push(Command::SMove(LLCD::new(0, d, 0)));
+                cur.y += d;
+                // Fill if should be Full but Void
+                if target.matrix[cur.x as usize][(cur.y - d) as usize][cur.z as usize]
+                    == Voxel::Full
+                {
+                    void_commands.push(Command::Fill(NCD::new(0, -d, 0)));
+                    source.matrix[cur.x as usize][(cur.y - d) as usize][cur.z as usize] =
+                        Voxel::Full;
+                }
+            }
+            for _ in 0..dz.abs() {
+                let d = if dz > 0 { 1 } else { -1 };
+                // Void if next is Full
+                if source.matrix[cur.x as usize][cur.y as usize][(cur.z + d) as usize]
+                    == Voxel::Full
+                {
+                    void_commands.push(Command::Void(NCD::new(0, 0, d)));
+                    source.matrix[cur.x as usize][cur.y as usize][(cur.z + d) as usize] =
+                        Voxel::Void
+                }
+                // SMove
+                void_commands.push(Command::SMove(LLCD::new(0, 0, d)));
+                cur.z += d;
+                // Fill if should be Full but Void
+                if target.matrix[cur.x as usize][cur.y as usize][(cur.z - d) as usize]
+                    == Voxel::Full
+                {
+                    void_commands.push(Command::Fill(NCD::new(0, 0, -d)));
+                    source.matrix[cur.x as usize][cur.y as usize][(cur.z - d) as usize] =
+                        Voxel::Full;
+                }
+            }
+        }
+    }
+    (commands, void_commands)
 }
 
 fn calc_width_list(size: usize, split: usize) -> Vec<i32> {
@@ -358,7 +467,6 @@ fn find_nearest_wrong_fill(
         for d in ds.iter() {
             let position = *next + d;
             if !region.contains(position) {
-                println!("{:?}", position);
                 continue;
             }
             heap.push(VoidQueueItem {
