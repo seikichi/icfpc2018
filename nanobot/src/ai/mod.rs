@@ -6,6 +6,7 @@ pub mod builder;
 pub mod config;
 pub mod grid_fission;
 pub mod naive_reassemble;
+pub mod squad;
 pub mod utils;
 pub mod void;
 pub mod void_assemble;

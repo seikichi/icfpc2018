@@ -47,7 +47,7 @@ impl Error for CommandParseError {
     }
 }
 
-#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug, Hash)]
 pub enum Command {
     // singleton
     Halt,
@@ -327,7 +327,7 @@ impl fmt::Display for CD {
     }
 }
 
-#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug, Hash)]
 pub struct NCD {
     x: i32,
     y: i32,
@@ -371,7 +371,7 @@ fn ncd_encdec_test() {
     assert_eq!(ncd2, ncd);
 }
 
-#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug, Hash)]
 pub struct FCD {
     x: i32,
     y: i32,
@@ -422,7 +422,7 @@ fn fcd_encdec_test() {
     assert_eq!(fcd2, fcd);
 }
 
-#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug, Hash)]
 pub struct SLCD {
     x: i32,
     y: i32,
@@ -488,7 +488,7 @@ fn slcd_encdec_test() {
     assert_eq!(slcd2, slcd);
 }
 
-#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug, Hash)]
 pub struct LLCD {
     pub x: i32,
     pub y: i32,
@@ -636,7 +636,7 @@ impl Region {
             && (c.0.z <= p.z && p.z <= c.1.z)
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = Position> {
+    pub fn iter(&self) -> impl Iterator<Item=Position> {
         let c = self.canonical();
         (c.0.z..(c.1.z + 1)).flat_map(move |z| {
             (c.0.y..(c.1.y + 1))
