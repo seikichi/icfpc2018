@@ -146,15 +146,19 @@ impl BfsAI {
     //     unimplemented!();
     // }
     // SMove・LMoveの系列をbfsで作って移動してfillする
-    fn make_target_fill_command(&self, from: &Position, to: &Position) -> Option<Vec<Command>> {
+    fn make_target_fill_command(&mut self, from: &Position, to: &Position) -> Option<Vec<Command>> {
         let mut ret = vec![];
+        assert!(!self.volatiles.contains(to));
+        self.volatiles.insert(*to);
         let tos = self.pos_ncd_all(from, to);
         let (nto, mut commands) = match self.make_move_any_command(from, &tos) {
             None => {
+                self.volatiles.remove(to);
                 return None;
             }
             Some(v) => v,
         };
+        self.volatiles.remove(to);
         ret.append(&mut commands);
         let mut commands = self.make_fill_command(&nto, to);
         ret.append(&mut commands);
@@ -296,6 +300,9 @@ impl BfsAI {
             }
             Command::GVoid(_, _) => vec![],
         };
+        // println!("{:?} {:?}", from, command);
+        // println!("{:?}", self.volatiles);
+        // println!("{:?}", ps);
         for p in ps.iter() {
             assert!(!self.volatiles.contains(p));
             self.volatiles.insert(*p);
