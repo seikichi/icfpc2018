@@ -282,77 +282,98 @@ fn generate_fill_and_void_commands(
     {
         let mut path = find_void_path(&source, target, region, &cur);
         path.push(goal);
+        let mut expanded_region = region.clone();
+        expanded_region.0.z -= 1;
+        expanded_region.1.y += 1;
+        expanded_region.1.z += 1;
 
         for next in path.into_iter() {
-            let dx = next.x - cur.x;
-            let dy = next.y - cur.y;
-            let dz = next.z - cur.z;
-            for _ in 0..dx.abs() {
-                let d = if dx > 0 { 1 } else { -1 };
-                // Void if next is Full
-                if source.matrix[(cur.x + d) as usize][cur.y as usize][cur.z as usize]
-                    == Voxel::Full
-                {
-                    void_commands.push(Command::Void(NCD::new(d, 0, 0)));
-                    source.matrix[(cur.x + d) as usize][cur.y as usize][cur.z as usize] =
-                        Voxel::Void
+            let path = shortest_path(&source, &expanded_region, &cur, &next);
+            for cd in path.iter() {
+                let prev = cur;
+                let next = cur + cd;
+                if source.matrix[next.x as usize][next.y as usize][next.z as usize] == Voxel::Full {
+                    void_commands.push(Command::Void(*cd));
+                    source.matrix[next.x as usize][next.y as usize][next.z as usize] = Voxel::Void;
                 }
                 // SMove
-                void_commands.push(Command::SMove(LLCD::new(d, 0, 0)));
-                cur.x += d;
+                void_commands.push(Command::SMove(LLCD::new(cd.x(), cd.y(), cd.z())));
+                cur = next;
                 // Fill if should be Full but Void
-                if target.matrix[(cur.x - d) as usize][cur.y as usize][cur.z as usize]
-                    == Voxel::Full
-                {
-                    void_commands.push(Command::Fill(NCD::new(-d, 0, 0)));
-                    source.matrix[(cur.x - d) as usize][cur.y as usize][cur.z as usize] =
-                        Voxel::Full;
+                if target.matrix[prev.x as usize][prev.y as usize][prev.z as usize] == Voxel::Full {
+                    void_commands.push(Command::Fill(NCD::new(-cd.x(), -cd.y(), -cd.z())));
+                    source.matrix[prev.x as usize][prev.y as usize][prev.z as usize] = Voxel::Full;
                 }
             }
-            for _ in 0..dy.abs() {
-                let d = if dy > 0 { 1 } else { -1 };
-                // Void if next is Full
-                if source.matrix[cur.x as usize][(cur.y + d) as usize][cur.z as usize]
-                    == Voxel::Full
-                {
-                    void_commands.push(Command::Void(NCD::new(0, d, 0)));
-                    source.matrix[cur.x as usize][(cur.y + d) as usize][cur.z as usize] =
-                        Voxel::Void
-                }
-                // SMove
-                void_commands.push(Command::SMove(LLCD::new(0, d, 0)));
-                cur.y += d;
-                // Fill if should be Full but Void
-                if target.matrix[cur.x as usize][(cur.y - d) as usize][cur.z as usize]
-                    == Voxel::Full
-                {
-                    void_commands.push(Command::Fill(NCD::new(0, -d, 0)));
-                    source.matrix[cur.x as usize][(cur.y - d) as usize][cur.z as usize] =
-                        Voxel::Full;
-                }
-            }
-            for _ in 0..dz.abs() {
-                let d = if dz > 0 { 1 } else { -1 };
-                // Void if next is Full
-                if source.matrix[cur.x as usize][cur.y as usize][(cur.z + d) as usize]
-                    == Voxel::Full
-                {
-                    void_commands.push(Command::Void(NCD::new(0, 0, d)));
-                    source.matrix[cur.x as usize][cur.y as usize][(cur.z + d) as usize] =
-                        Voxel::Void
-                }
-                // SMove
-                void_commands.push(Command::SMove(LLCD::new(0, 0, d)));
-                cur.z += d;
-                // Fill if should be Full but Void
-                if target.matrix[cur.x as usize][cur.y as usize][(cur.z - d) as usize]
-                    == Voxel::Full
-                {
-                    void_commands.push(Command::Fill(NCD::new(0, 0, -d)));
-                    source.matrix[cur.x as usize][cur.y as usize][(cur.z - d) as usize] =
-                        Voxel::Full;
-                }
-            }
+            // let dx = next.x - cur.x;
+            // let dy = next.y - cur.y;
+            // let dz = next.z - cur.z;
+            // for _ in 0..dx.abs() {
+            //     let d = if dx > 0 { 1 } else { -1 };
+            //     // Void if next is Full
+            //     if source.matrix[(cur.x + d) as usize][cur.y as usize][cur.z as usize]
+            //         == Voxel::Full
+            //     {
+            //         void_commands.push(Command::Void(NCD::new(d, 0, 0)));
+            //         source.matrix[(cur.x + d) as usize][cur.y as usize][cur.z as usize] =
+            //             Voxel::Void
+            //     }
+            //     // SMove
+            //     void_commands.push(Command::SMove(LLCD::new(d, 0, 0)));
+            //     cur.x += d;
+            //     // Fill if should be Full but Void
+            //     if target.matrix[(cur.x - d) as usize][cur.y as usize][cur.z as usize]
+            //         == Voxel::Full
+            //     {
+            //         void_commands.push(Command::Fill(NCD::new(-d, 0, 0)));
+            //         source.matrix[(cur.x - d) as usize][cur.y as usize][cur.z as usize] =
+            //             Voxel::Full;
+            //     }
+            // }
+            // for _ in 0..dy.abs() {
+            //     let d = if dy > 0 { 1 } else { -1 };
+            //     // Void if next is Full
+            //     if source.matrix[cur.x as usize][(cur.y + d) as usize][cur.z as usize]
+            //         == Voxel::Full
+            //     {
+            //         void_commands.push(Command::Void(NCD::new(0, d, 0)));
+            //         source.matrix[cur.x as usize][(cur.y + d) as usize][cur.z as usize] =
+            //             Voxel::Void
+            //     }
+            //     // SMove
+            //     void_commands.push(Command::SMove(LLCD::new(0, d, 0)));
+            //     cur.y += d;
+            //     // Fill if should be Full but Void
+            //     if target.matrix[cur.x as usize][(cur.y - d) as usize][cur.z as usize]
+            //         == Voxel::Full
+            //     {
+            //         void_commands.push(Command::Fill(NCD::new(0, -d, 0)));
+            //         source.matrix[cur.x as usize][(cur.y - d) as usize][cur.z as usize] =
+            //             Voxel::Full;
+            //     }
+            // }
+            // for _ in 0..dz.abs() {
+            //     let d = if dz > 0 { 1 } else { -1 };
+            //     // Void if next is Full
+            //     if source.matrix[cur.x as usize][cur.y as usize][(cur.z + d) as usize]
+            //         == Voxel::Full
+            //     {
+            //         void_commands.push(Command::Void(NCD::new(0, 0, d)));
+            //         source.matrix[cur.x as usize][cur.y as usize][(cur.z + d) as usize] =
+            //             Voxel::Void
+            //     }
+            //     // SMove
+            //     void_commands.push(Command::SMove(LLCD::new(0, 0, d)));
+            //     cur.z += d;
+            //     // Fill if should be Full but Void
+            //     if target.matrix[cur.x as usize][cur.y as usize][(cur.z - d) as usize]
+            //         == Voxel::Full
+            //     {
+            //         void_commands.push(Command::Fill(NCD::new(0, 0, -d)));
+            //         source.matrix[cur.x as usize][cur.y as usize][(cur.z - d) as usize] =
+            //             Voxel::Full;
+            //     }
+            // }
         }
     }
     (commands, void_commands)
@@ -695,4 +716,103 @@ fn generate_x_concur_commands(width_list: &Vec<i32>) -> Vec<Vec<Command>> {
     }
 
     commands
+}
+
+#[derive(Eq, PartialEq)]
+struct Item {
+    src: Position,
+    dst: Position,
+    weight: i32,
+}
+
+impl Ord for Item {
+    fn cmp(&self, other: &Item) -> Ordering {
+        (-self.weight, self.src, self.dst).cmp(&(-other.weight, other.src, other.dst))
+    }
+}
+
+impl PartialOrd for Item {
+    fn partial_cmp(&self, other: &Item) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+fn shortest_path(source: &Model, region: &Region, from: &Position, to: &Position) -> Vec<NCD> {
+    if *from == *to {
+        return vec![];
+    }
+    let r = source.matrix.len();
+    let xmin = region.0.x;
+    let ymin = region.0.y;
+    let zmin = region.0.z;
+    let xwidth = (region.1.x + 1 - region.0.x) as usize;
+    let ywidth = (region.1.y + 1 - region.0.y) as usize;
+    let zwidth = (region.1.z + 1 - region.0.z) as usize;
+
+    let uninitialized = Position::new(-1, -1, -1);
+    let mut dist = vec![vec![vec![(r * r * r + 1) as i32; zwidth]; ywidth]; xwidth];
+    let mut prev = vec![vec![vec![uninitialized; zwidth]; ywidth]; xwidth];
+    let mut heap: BinaryHeap<Item> = BinaryHeap::new();
+
+    let ds = vec![
+        NCD::new(1, 0, 0),
+        NCD::new(-1, 0, 0),
+        NCD::new(0, 1, 0),
+        NCD::new(0, -1, 0),
+        NCD::new(0, 0, 1),
+        NCD::new(0, 0, -1),
+    ];
+
+    heap.push(Item {
+        src: from.clone(), // OK?
+        dst: from.clone(),
+        weight: 0,
+    });
+    while !heap.is_empty() {
+        let e = heap.pop().unwrap();
+        if prev[(e.dst.x - xmin) as usize][(e.dst.y - ymin) as usize][(e.dst.z - zmin) as usize]
+            != uninitialized
+        {
+            continue;
+        }
+        prev[(e.dst.x - xmin) as usize][(e.dst.y - ymin) as usize][(e.dst.z - zmin) as usize] =
+            e.src;
+        if e.dst == *to {
+            break;
+        }
+
+        for d in ds.iter() {
+            let f = e.dst + d;
+            if !region.contains(f) {
+                continue;
+            }
+            let v = source.matrix[f.x as usize][f.y as usize][f.z as usize];
+            let cost = if v == Voxel::Full { 3 } else { 1 };
+            let weight = e.weight + cost;
+
+            let dx = (f.x - xmin) as usize;
+            let dy = (f.y - ymin) as usize;
+            let dz = (f.z - zmin) as usize;
+            if weight < dist[dx][dy][dz] {
+                dist[dx][dy][dz] = weight;
+                heap.push(Item {
+                    src: e.dst,
+                    dst: f,
+                    weight,
+                });
+            }
+        }
+    }
+
+    let mut path = vec![];
+
+    let mut u = to;
+    while u != from {
+        let p = &prev[(u.x - xmin) as usize][(u.y - ymin) as usize][(u.z - zmin) as usize];
+        path.push(NCD::new(u.x - p.x, u.y - p.y, u.z - p.z));
+        u = p;
+    }
+    path.reverse();
+
+    path
 }
