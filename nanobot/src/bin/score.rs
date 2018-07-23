@@ -5,11 +5,15 @@ use getopts::Options;
 use nanobot_lib::common::read_trace_file;
 use nanobot_lib::model::Model;
 use nanobot_lib::state::State;
-
 use std::env;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
+
+enum OutputFormat {
+    Text,
+    Json,
+}
 
 fn print_usage(program: &str, opts: Options) {
     let brief = format!("Usage: {} [options]", program);
@@ -25,6 +29,7 @@ fn main() {
     opts.optopt("", "target", "set target model", "FILE");
     opts.reqopt("", "trace", "set trace", "FILE");
     opts.optflag("h", "help", "print this help menu");
+    opts.optflag("j", "json", "print in JSON format");
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
         Err(f) => {
@@ -40,6 +45,11 @@ fn main() {
         print_usage(&program, opts);
         panic!("source or target file should be selected");
     }
+    let output_format = if matches.opt_present("j") {
+        OutputFormat::Json
+    } else {
+        OutputFormat::Text
+    };
 
     // Load
     let trace = read_trace_file(Path::new(&matches.opt_str("trace").unwrap())).unwrap();
@@ -95,9 +105,16 @@ fn main() {
         }
     }
 
-    println!("Success:: ");
-    println!("Time:      ?");
-    println!("Commands:  {}", trace.len());
-    println!("Energy:    {}", state.get_energy());
-    println!("ClockTime: ?ms");
+    match output_format {
+        OutputFormat::Text => {
+            println!("Success:: ");
+            println!("Time:      ?");
+            println!("Commands:  {}", trace.len());
+            println!("Energy:    {}", state.get_energy());
+            println!("ClockTime: ?ms");
+        }
+        OutputFormat::Json => {
+            println!("{{\"commands\": {}, \"energy\": {}}}", trace.len(), state.get_energy());
+        }
+    }
 }
