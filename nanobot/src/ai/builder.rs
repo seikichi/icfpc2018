@@ -4,6 +4,8 @@ use ai::grid_fission::GridFissionAI;
 use ai::naive_reassemble::NaiveReassembleAI;
 use ai::void::VoidAI;
 use ai::void_assemble::VoidAssembleAI;
+use ai::gvoid::GvoidAI;
+use ai::gvoid_2d::Gvoid2dAI;
 use ai::AssembleAI;
 use ai::DisassembleAI;
 use ai::ReassembleAI;
@@ -28,6 +30,8 @@ pub fn build_assembler(name: &String, config: &Config, target: &Model) -> Box<As
 pub fn build_disassembler(name: &String, config: &Config, _source: &Model) -> Box<DisassembleAI> {
     match name.as_str() {
         "default" => Box::new(VoidAI::new(config)),
+        "gvoid" => Box::new(GvoidAI::new(config)),
+        "gvoid_2d" => Box::new(Gvoid2dAI::new(config)),
         _ => {
             eprintln!("failed to build assembler AI (name = {})", name);
             process::exit(1);
