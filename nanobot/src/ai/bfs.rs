@@ -90,7 +90,7 @@ impl BfsAI {
             // groundからの距離が近いやつをなるべく優先する
             // 暫定でyが小さいやつを優先させる
             let mut score = ((*from - c).manhattan_length() + 2) / 5 * 100;
-            score += c.y * 200;
+            score += c.y * 500;
             score += self.rng.gen_range(0, 130);
             if score < best {
                 target = i;
@@ -121,9 +121,10 @@ impl BfsAI {
     fn pos_smove_all(&self, pos: &Position) -> Vec<(Position, Command)> {
         let mut ret = vec![];
         for dir in 0..6 {
-            let dx = [0, 0, 1, -1, 0, 0];
-            let dy = [1, -1, 0, 0, 0, 0];
-            let dz = [0, 0, 0, 0, 1, -1];
+            // yが高いほうが優先
+            let dy = [1, 0, 0, 0, 0, -1];
+            let dx = [0, 1, -1, 0, 0, 0];
+            let dz = [0, 0, 0, 1, -1, 0];
             for dist in 1..15 + 1 {
                 let llcd = LLCD::new(dist * dx[dir], dist * dy[dir], dist * dz[dir]);
                 let npos = *pos + &llcd;
