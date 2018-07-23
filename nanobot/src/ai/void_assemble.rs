@@ -1,16 +1,203 @@
-// use ai::config::Config;
-// use ai::utils::*;
-// use ai::AssembleAI;
+use ai::config::Config;
+use ai::utils::*;
+use ai::AssembleAI;
 use common::*;
 use model::Model;
-// use state::State;
-// use std::cmp::min;
-// use std::iter::repeat;
+use state::State;
+use std::cmp::min;
+use std::iter::repeat;
 
 use std::cmp::{Ord, Ordering, PartialOrd};
 use std::collections::{BinaryHeap, HashSet};
 use std::ops::Deref;
 // use std::iter::repeat;
+
+pub struct VoidAssembleAI {}
+
+impl VoidAssembleAI {
+    pub fn new(_config: &Config) -> Self {
+        VoidAssembleAI {}
+    }
+}
+
+impl AssembleAI for VoidAssembleAI {
+    fn assemble(&mut self, target: &Model) -> Vec<Command> {
+        let bounding = match calc_bounding_box(target) {
+            Some(b) => b,
+            None => {
+                return vec![Command::Halt];
+            }
+        };
+        let r = target.matrix.len();
+        let mut state = State::initial(r);
+
+        let mut source = vec![vec![vec![Voxel::Void; r]; r]; r];
+        let mut source = Model { matrix: source };
+
+        let x_size = (bounding.max_x - bounding.min_x + 1) as usize;
+        let z_size = (bounding.max_z - bounding.min_z + 1) as usize;
+        let xsplit = min(x_size, 20);
+
+        let mut commands = vec![];
+        commands.extend(move_straight_x(bounding.min_x));
+        commands.extend(move_straight_z(bounding.min_z));
+
+        for m in commands.iter() {
+            let v = vec![m.clone()];
+            state.update_time_step(&v[..]).expect("failed to move");
+        }
+
+        for v in generate_devide_commands((x_size, z_size), (xsplit, 1)).into_iter() {
+            state.update_time_step(&v[..]).expect("failed to devide");
+            commands.extend(v);
+        }
+
+        let mut commands_list: Vec<Vec<Command>> = vec![];
+
+        let x_width_list = calc_width_list(x_size, xsplit);
+
+        // up
+        for i in 0..xsplit {
+            let mut x = bounding.min_x;
+            for j in 0..i {
+                x += x_width_list[j];
+            }
+            let initial = Position::new(x, 0, bounding.min_z);
+            let region = Region(
+                Position::new(x, 0, bounding.min_z),
+                Position::new(x + x_width_list[i] - 1, bounding.max_y, bounding.max_z),
+            );
+            commands_list.push(generate_fill_commands(
+                target,
+                &initial,
+                &region,
+                &mut source,
+            ));
+        }
+        let mut index = 0;
+        loop {
+            let mut all_wait = true;
+            let mut step = vec![];
+            for v in commands_list.iter() {
+                step.push(if index >= v.len() {
+                    Command::Wait
+                } else {
+                    all_wait = false;
+                    v[index].clone()
+                });
+            }
+            if all_wait {
+                break;
+            }
+
+            state.update_time_step(&step[..]).expect("failed to ground");
+            commands.extend(step);
+            index += 1;
+        }
+        // down
+        // for i in 0..xsplit {
+        //     let mut x = bounding.min_x;
+        //     for j in 0..i {
+        //         x += x_width_list[j];
+        //     }
+        //     let initial = Position::new(x, 0, bounding.min_z);
+        //     let region = Region(
+        //         Position::new(x, 0, bounding.min_z),
+        //         Position::new(x + x_width_list[i] - 1, bounding.max_y, bounding.max_z),
+        //     );
+        //     commands_list.push(generate_void_commands(
+        //         target,
+        //         &initial,
+        //         &region,
+        //         &mut source,
+        //     ));
+        // }
+        // let mut index = 0;
+        // loop {
+        //     let mut all_wait = true;
+        //     let mut step = vec![];
+        //     for v in commands_list.iter() {
+        //         step.push(if index >= v.len() {
+        //             Command::Wait
+        //         } else {
+        //             all_wait = false;
+        //             v[index].clone()
+        //         });
+        //     }
+        //     if all_wait {
+        //         break;
+        //     }
+
+        //     state.update_time_step(&step[..]).expect("failed to ground");
+        //     commands.extend(step);
+        //     index += 1;
+        // }
+        // concur
+
+        // finish
+        commands
+    }
+}
+
+fn generate_fill_commands(
+    target: &Model,
+    initial: &Position,
+    region: &Region,
+    source: &mut Model,
+) -> Vec<Command> {
+    let path = find_fill_path(target, region, initial);
+    let mut cur = Position::new(initial.x, initial.y + 1, initial.z);
+    let mut commands = vec![
+        Command::SMove(LLCD::new(0, 1, 0)),
+        Command::Fill(NCD::new(0, -1, 0)),
+    ];
+    source.matrix[cur.x as usize][(cur.y - 1) as usize][cur.z as usize] = Voxel::Full;
+
+    for next in path.into_iter() {
+        let dx = next.x - cur.x;
+        let dy = next.y + 1 - cur.y;
+        let dz = next.z - cur.z;
+        for _ in 0..dx.abs() {
+            let d = if dx > 0 { 1 } else { -1 };
+            commands.extend(move_straight_x(d));
+            cur.x += d;
+
+            if source.matrix[cur.x as usize][(cur.y - 1) as usize][cur.z as usize] == Voxel::Void {
+                commands.push(Command::Fill(NCD::new(0, -1, 0)));
+                source.matrix[cur.x as usize][(cur.y - 1) as usize][cur.z as usize] = Voxel::Full;
+            }
+        }
+        for _ in 0..dz.abs() {
+            let d = if dz > 0 { 1 } else { -1 };
+            commands.extend(move_straight_z(d));
+            cur.z += d;
+
+            if source.matrix[cur.x as usize][(cur.y - 1) as usize][cur.z as usize] == Voxel::Void {
+                commands.push(Command::Fill(NCD::new(0, -1, 0)));
+                source.matrix[cur.x as usize][(cur.y - 1) as usize][cur.z as usize] = Voxel::Full;
+            }
+        }
+        for _ in 0..dy.abs() {
+            commands.extend(move_straight_y(1));
+            cur.y += 1;
+
+            if source.matrix[cur.x as usize][(cur.y - 1) as usize][cur.z as usize] == Voxel::Void {
+                commands.push(Command::Fill(NCD::new(0, -1, 0)));
+                source.matrix[cur.x as usize][(cur.y - 1) as usize][cur.z as usize] = Voxel::Full;
+            }
+        }
+    }
+    commands
+}
+
+fn calc_width_list(size: usize, split: usize) -> Vec<i32> {
+    let mut list = vec![];
+    for i in 0..split {
+        let width = (size / split) as i32 + if i < size % split { 1 } else { 0 };
+        list.push(width);
+    }
+    list
+}
 
 fn find_fill_path(target: &Model, region: &Region, initial: &Position) -> Vec<Position> {
     let mut path = vec![];
@@ -19,6 +206,28 @@ fn find_fill_path(target: &Model, region: &Region, initial: &Position) -> Vec<Po
 
     loop {
         let next = match find_nearest_full(&current, &visited, target, region) {
+            Some(v) => v,
+            None => break,
+        };
+        path.push(next);
+        visited.insert(next);
+        current = next;
+    }
+    path
+}
+
+fn find_void_path(
+    source: &Model,
+    target: &Model,
+    region: &Region,
+    initial: &Position,
+) -> Vec<Position> {
+    let mut path = vec![];
+    let mut visited: HashSet<Position> = HashSet::new();
+    let mut current = initial.clone();
+
+    loop {
+        let next = match find_nearest_wrong_fill(&current, &visited, source, target, region) {
             Some(v) => v,
             None => break,
         };
@@ -99,13 +308,77 @@ fn find_nearest_full(
     None
 }
 
-fn find_void_path(
+#[derive(Eq, PartialEq)]
+struct VoidQueueItem {
+    position: Position,
+    dist: i32,
+}
+
+impl Ord for VoidQueueItem {
+    fn cmp(&self, other: &VoidQueueItem) -> Ordering {
+        (self.y, -self.dist, self.z, self.x).cmp(&(other.y, -other.dist, other.z, other.x))
+    }
+}
+
+impl PartialOrd for VoidQueueItem {
+    fn partial_cmp(&self, other: &VoidQueueItem) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Deref for VoidQueueItem {
+    type Target = Position;
+    fn deref(&self) -> &Position {
+        &self.position
+    }
+}
+
+fn find_nearest_wrong_fill(
+    current: &Position,
+    visited: &HashSet<Position>,
     source: &Model,
     target: &Model,
     region: &Region,
-    initial: &Position,
-) -> Vec<Position> {
-    vec![]
+) -> Option<Position> {
+    let mut region_visited: HashSet<Position> = HashSet::new();
+    let mut heap = BinaryHeap::new();
+    heap.push(VoidQueueItem {
+        position: current.clone(),
+        dist: 0,
+    });
+    let ds = vec![
+        NCD::new(1, 0, 0),
+        NCD::new(-1, 0, 0),
+        NCD::new(0, -1, 0),
+        NCD::new(0, 0, 1),
+        NCD::new(0, 0, -1),
+    ];
+
+    while !heap.is_empty() {
+        let next = heap.pop().unwrap();
+        let sv = source.matrix[next.x as usize][next.y as usize][next.z as usize];
+        let tv = target.matrix[next.x as usize][next.y as usize][next.z as usize];
+        if sv == Voxel::Full && tv == Voxel::Void && !visited.contains(&next) {
+            return Some(*next);
+        }
+        if region_visited.contains(&next) {
+            continue;
+        }
+        region_visited.insert(next.clone());
+
+        for d in ds.iter() {
+            let position = *next + d;
+            if !region.contains(position) {
+                println!("{:?}", position);
+                continue;
+            }
+            heap.push(VoidQueueItem {
+                position: position,
+                dist: (*current - &position).manhattan_length(),
+            });
+        }
+    }
+    None
 }
 
 #[test]
@@ -162,15 +435,15 @@ fn test_void_path() {
     let target = Model { matrix: target };
 
     let initial = Position::new(2, 2, 2);
-    let region = Region(initial, Position::new(0, 2, 0));
+    let region = Region(Position::new(0, 0, 0), Position::new(2, 2, 2));
 
     let actual = find_void_path(&source, &target, &region, &initial);
     let expected = vec![
-        Position::new(0, 1, 1),
-        Position::new(0, 1, 2),
         Position::new(1, 1, 2),
-        Position::new(1, 0, 0),
+        Position::new(0, 1, 2),
+        Position::new(0, 1, 1),
         Position::new(0, 0, 0),
+        Position::new(1, 0, 0),
     ];
     assert_eq!(expected, actual);
 }
