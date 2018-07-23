@@ -15,12 +15,14 @@ use std::collections::VecDeque;
 
 struct BotState {
     bot: Nanobot,
+    fusions_bid: Option<Bid>,
     next_commands: VecDeque<Command>,
 }
 impl BotState {
     pub fn initial() -> Self {
         BotState {
             bot: Nanobot::initial(),
+            fusions_bid: None,
             next_commands: VecDeque::new(),
         }
     }
@@ -40,6 +42,8 @@ pub struct BfsAI {
     candidates: Vec<Position>,
     visited: HashSet<Position>, // candidatesとして入ったことがあるやつのリスト
     trace: Vec<Command>,
+    added_bot_list: Vec<Nanobot>,
+    deleted_bot_list: Vec<Bid>,
 }
 
 impl BfsAI {
@@ -58,6 +62,8 @@ impl BfsAI {
             candidates: vec![],
             visited: HashSet::new(),
             trace: vec![],
+            added_bot_list: vec![],
+            deleted_bot_list: vec![],
         }
     }
     fn is_all_bot_command_done(&self) -> bool {
@@ -84,9 +90,16 @@ impl BfsAI {
     fn select_one_candidate(&mut self, from: &Position) -> Option<Position> {
         let mut target = self.candidates.len();
         let mut best = 1 << 30;
-        for (i, c) in self.candidates.iter().enumerate() {
+        'outer_loop: for (i, c) in self.candidates.iter().enumerate() {
             if self.volatiles.contains(c) {
                 continue;
+            }
+            for b in self.bots.iter() {
+                // 自分自身を含めて、botの真上は候補に入れない
+                let pos = b.bot.pos;
+                if c.x == pos.x && c.z == pos.z && c.y > pos.y {
+                    continue 'outer_loop;
+                }
             }
             // TODO candidateの選択をもう少しましにする
             // groundからの距離が近いやつをなるべく優先する
@@ -147,10 +160,13 @@ impl BfsAI {
     // }
     // SMove・LMoveの系列をbfsで作って移動してfillする
     fn make_target_fill_command(&mut self, from: &Position, to: &Position) -> Option<Vec<Command>> {
+        let tos = self.pos_ncd_all(from, to);
+        if tos.len() == 0 {
+            return None;
+        }
         let mut ret = vec![];
         assert!(!self.volatiles.contains(to));
         self.volatiles.insert(*to); // Fillする位置を通るとassertに引っかかってしまうのでいったん除外する
-        let tos = self.pos_ncd_all(from, to);
         let (nto, mut commands) = match self.make_move_any_command(from, &tos) {
             None => {
                 self.volatiles.remove(to);
@@ -178,8 +194,9 @@ impl BfsAI {
         let mut parents = HashMap::<Position, (Position, Command)>::new(); // visit + 経路復元用
         parents.insert(*from, (*from, Command::Wait));
         let mut max_dist = 15;
+        let max_cnt = (*from - &tos0).manhattan_length() / max_dist + 5;
         for to in tos.iter() {
-            max_dist = min(max_dist, (*from - to).manhattan_length());
+            max_dist = min(max_dist, (*from - to).chessboard_length());
         }
         while let Some((_score, f, cnt)) = que.pop() {
             if tos.contains(&f) {
@@ -193,6 +210,9 @@ impl BfsAI {
                 }
                 ret.reverse();
                 return Some((f, ret));
+            }
+            if cnt == max_cnt {
+                continue;
             }
             // TODO lmoveも追加する
             let next = self.pos_smove_all(&f, max_dist);
@@ -236,6 +256,14 @@ impl BfsAI {
             }
         }
     }
+    fn make_up_or_random_move_command(&mut self, from: &Position) -> Command {
+        let llcd = LLCD::new(0, 1, 0);
+        let to = *from + &llcd;
+        if self.is_safe_coordinate(&to) {
+            return Command::SMove(llcd);
+        }
+        self.make_random_move_command(from)
+    }
     fn make_random_move_command(&mut self, from: &Position) -> Command {
         'outer_loop: for _ in 0..5 {
             let dir = self.rng.gen_range(0, 6);
@@ -255,6 +283,81 @@ impl BfsAI {
             return Command::SMove(llcd);
         }
         Command::Wait
+    }
+    fn make_fission_command(&mut self, from: &Position, seeds_cnt: usize) -> Command {
+        let next = self.pos_ncd_all(from, from);
+        if seeds_cnt == 0 || next.len() == 0 {
+            return Command::Wait;
+        }
+        let to = next[self.rng.gen_range(0, next.len())];
+        let ncd = to - from;
+        let ncd = NCD::new(ncd.x, ncd.y, ncd.z);
+        let m = (seeds_cnt - 1) / 2;
+        Command::Fission(ncd, m)
+    }
+    // 適当に隣にいるやつを見つけてfusionする
+    fn make_fusions_ncd_command(&mut self, from: &Position, s_index: usize) {
+        for p_index in 0..self.bots.len() {
+            if s_index == p_index || self.bots[p_index].next_commands.len() > 0 {
+                continue;
+            }
+            let to = self.bots[p_index].bot.pos;
+            let ncd = *from - &to;
+            if ncd.manhattan_length() <= 2 && ncd.chessboard_length() == 1 {
+                let ncd = NCD::new(ncd.x, ncd.y, ncd.z);
+                self.make_fusion_command(p_index, s_index, &ncd);
+                return;
+            }
+        }
+    }
+    fn make_fusion_command(&mut self, p_index: usize, s_index: usize, ncd: &NCD) {
+        assert_eq!(self.bots[p_index].next_commands.len(), 0);
+        assert!(self.bots[p_index].fusions_bid.is_none());
+        for _ in 0..self.bots[s_index].next_commands.len() {
+            // 同じタイミングに合わせる
+            self.bots[p_index].next_commands.push_back(Command::Wait);
+        }
+        self.bots[p_index]
+            .next_commands
+            .push_back(Command::FusionP(*ncd));
+        self.bots[p_index].fusions_bid = Some(self.bots[s_index].bot.bid);
+        let rev_ncd = NCD::new(-ncd.x(), -ncd.y(), -ncd.z());
+        self.bots[s_index]
+            .next_commands
+            .push_back(Command::FusionS(rev_ncd));
+    }
+    // 適当にfusion相手を見つけてfusionする:
+    fn make_move_fusion_command(&mut self, from: &Position, s_index: usize) {
+        assert_eq!(self.bots[s_index].next_commands.len(), 0);
+        for p_index in 0..self.bots.len() {
+            if p_index == s_index || self.bots[p_index].next_commands.len() != 0 {
+                continue;
+            }
+            // p_index決定
+            // p_indexの周りに行く命令を作る
+            let to = self.bots[p_index].bot.pos;
+            let tos = self.pos_ncd_all(from, &to);
+            if tos.len() == 0 {
+                return;
+            }
+            let (nto, commands) = match self.make_move_any_command(from, &tos) {
+                None => {
+                    return;
+                }
+                Some(v) => v,
+            };
+            // 命令を入れた後にfusionコマンドを入れる
+            let mut commands = commands.into_iter().collect();
+            self.set_volatiles(&from, &commands);
+            self.bots[s_index].next_commands.append(&mut commands);
+            let ncd = nto - &to;
+            let ncd = NCD::new(ncd.x, ncd.y, ncd.z);
+            self.make_fusion_command(p_index, s_index, &ncd);
+            // println!("{:?} {:?} {:?} {:?}", from, nto, to, ncd);
+            // println!("p: {:?}", self.bots[p_index].next_commands);
+            // println!("s: {:?}", self.bots[s_index].next_commands);
+            break;
+        }
     }
     fn simulate_move(&self, from: &Position, command: &Command) -> Position {
         match command {
@@ -381,8 +484,9 @@ impl BfsAI {
             Command::LMove(slcd1, slcd2) => {
                 self.bots[bot_index].bot.pos = from + &slcd1 + &slcd2;
             }
-            Command::Fission(_, _) => {
-                unimplemented!();
+            Command::Fission(ncd, m) => {
+                let new_bot = self.bots[bot_index].bot.fission(&ncd, m);
+                self.added_bot_list.push(new_bot);
             }
             Command::Fill(ncd) => {
                 let to = from + &ncd;
@@ -396,7 +500,16 @@ impl BfsAI {
                 // TODO 穴ほって移動する場合にどうするか考える
             }
             Command::FusionP(_) => {
-                unimplemented!();
+                let s_bid = self.bots[bot_index].fusions_bid.unwrap();
+                for j in 0..self.bots.len() {
+                    let mut s_bot = self.bots[j].bot.clone();
+                    if self.bots[j].bot.bid == s_bid {
+                        self.bots[bot_index].bot.fusion(&mut s_bot);
+                        break;
+                    }
+                }
+                self.bots[bot_index].fusions_bid = None;
+                self.deleted_bot_list.push(s_bid);
             }
             Command::FusionS(_) => {
                 // FusionPの方で処理するので何もしなくてよい
@@ -425,6 +538,24 @@ impl BfsAI {
         for i in 0..self.bots.len() {
             self.do_command(i);
         }
+
+        // Fission対応
+        for i in 0..self.added_bot_list.len() {
+            let mut bot_state = BotState::initial();
+            bot_state.bot = self.added_bot_list[i].clone();
+            self.bots.push(bot_state)
+        }
+        self.added_bot_list = vec![];
+        // Fusion対応
+        for &bid in self.deleted_bot_list.iter() {
+            for i in 0..self.bots.len() {
+                if self.bots[i].bot.bid == bid {
+                    self.bots.remove(i);
+                    break;
+                }
+            }
+        }
+        self.deleted_bot_list = vec![];
     }
 }
 
@@ -441,8 +572,32 @@ impl AssembleAI for BfsAI {
                 }
             }
         }
-        // TODO 分散
+        while self.bots.len() < 40 {
+            // 1ターンランダムムーブする
+            for i in 0..self.bots.len() {
+                let from = self.bots[i].bot.pos;
+                let commands = vec![self.make_random_move_command(&from)]
+                    .into_iter()
+                    .collect();
+                self.set_volatiles(&from, &commands);
+                self.bots[i].next_commands = commands;
+            }
+            self.do_time_step_simulation();
+
+            // fissionする
+            for i in 0..self.bots.len() {
+                let from = self.bots[i].bot.pos;
+                let seed_cnt = self.bots[i].bot.seeds.len();
+                let commands = vec![self.make_fission_command(&from, seed_cnt)]
+                    .into_iter()
+                    .collect();
+                self.set_volatiles(&from, &commands);
+                self.bots[i].next_commands = commands;
+            }
+            self.do_time_step_simulation();
+        }
         // ブロック埋め
+        let mut ng_count = 0;
         while self.candidates.len() > 0 || self.is_all_bot_command_done() {
             // println!("All Candidate: {}", self.visited.len());
             // println!("Rest Candidate: {}", self.candidates.len());
@@ -451,38 +606,96 @@ impl AssembleAI for BfsAI {
                 if self.bots[i].next_commands.len() != 0 {
                     continue;
                 }
+
                 let from = self.bots[i].bot.pos;
+                // candidateから1個取って処理する
                 let to = self.select_one_candidate(&from);
-                if to.is_none() {
-                    let commands = vec![self.make_random_move_command(&from)]
+                if to.is_some() {
+                    let to = to.unwrap();
+                    match self.make_target_fill_command(&from, &to) {
+                        None => {
+                            // 行けない
+                            self.candidates.push(to);
+                        }
+                        Some(commands) => {
+                            ng_count = 0;
+                            let commands = commands.into_iter().collect();
+                            // println!("{:?}", commands);
+                            self.set_volatiles(&from, &commands);
+                            self.bots[i].next_commands = commands;
+                        }
+                    }
+                }
+
+                // なんか失敗した場合
+                if self.bots[i].next_commands.len() == 0 {
+                    ng_count += 1;
+                    // nanobotが無駄に多い場合で、隣にfusionできる相手がいる場合はfusionする
+                    // 隣にいない場合は空間に余裕があるはずなので普通に処理する
+                    self.make_fusions_ncd_command(&from, i);
+                    if self.bots[i].next_commands.len() > 0 {
+                        continue;
+                    }
+                }
+
+                // やる事がない場合は上優先でランダムムーブする
+                if self.bots[i].next_commands.len() == 0 {
+                    let commands = vec![self.make_up_or_random_move_command(&from)]
                         .into_iter()
                         .collect();
                     self.set_volatiles(&from, &commands);
                     self.bots[i].next_commands = commands;
-                    continue;
                 }
-                match self.make_target_fill_command(&from, &to.unwrap()) {
-                    None => {
-                        // TODO
-                        // return self.trace.clone();
-                        assert!(false);
-                        // TODO candidateを元に戻すか保持する
-                        self.bots[i].nop();
-                    }
-                    Some(commands) => {
-                        let commands = commands.into_iter().collect();
-                        // println!("{:?}", commands);
-                        self.set_volatiles(&from, &commands);
-                        self.bots[i].next_commands = commands;
-                    }
+            }
+            self.do_time_step_simulation();
+            // println!("{}", ng_count);
+            if ng_count >= 1000 {
+                // 詰んだっぽい
+                // TODO
+                println!("Give Up fill!");
+                println!("All Candidate: {}", self.visited.len());
+                println!("Rest Candidate: {}", self.candidates.len());
+                return vec![];
+            }
+        }
+        //  集合
+        let mut ng_count = 0;
+        while self.bots.len() > 1 {
+            if ng_count > 100 {
+                // 詰んだっぽい
+                println!("Give Up fusion!");
+                println!("All Candidate: {}", self.visited.len());
+                println!("Rest Candidate: {}", self.candidates.len());
+                return vec![];
+            }
+            for s_index in 0..self.bots.len() {
+                if self.bots[s_index].next_commands.len() == 0 {
+                    let from = self.bots[s_index].bot.pos;
+                    self.make_fusions_ncd_command(&from, s_index);
+                }
+            }
+            for s_index in 0..self.bots.len() {
+                if self.bots[s_index].next_commands.len() == 0 {
+                    let from = self.bots[s_index].bot.pos;
+                    self.make_move_fusion_command(&from, s_index);
+                }
+            }
+            for i in 0..self.bots.len() {
+                if self.bots[i].next_commands.len() == 0 {
+                    ng_count += 1;
+                    // 命令が入ってなかったらランダムムーブ
+                    let from = self.bots[i].bot.pos;
+                    let commands = vec![self.make_up_or_random_move_command(&from)]
+                        .into_iter()
+                        .collect();
+                    self.set_volatiles(&from, &commands);
+                    self.bots[i].next_commands = commands;
                 }
             }
             self.do_time_step_simulation();
         }
-        // TODO 集合
         // (0, 0, 0)に戻る
         {
-            // TODO simulation
             let mut commands = self.make_return_command().unwrap();
             self.trace.append(&mut commands);
         }
@@ -516,7 +729,7 @@ fn select_one_candidate_test() {
 fn pos_ncd_all_test() {
     let model = Model::initial(100);
     let config = Config::new();
-    let mut bfs_ai = BfsAI::new(&config, &model, &model);
+    let bfs_ai = BfsAI::new(&config, &model, &model);
     {
         let poss = bfs_ai.pos_ncd_all(&Position::zero(), &Position::new(1, 1, 1));
         assert_eq!(poss.len(), 18);
