@@ -8,13 +8,13 @@ use std::cmp::max;
 use std::iter::repeat;
 
 pub struct Gvoid2dAI {
-    _dry_run_max_resolution: i32,
+    dry_run_max_resolution: i32,
 }
 
 impl Gvoid2dAI {
     pub fn new(config: &Config) -> Self {
         Gvoid2dAI {
-            _dry_run_max_resolution: config.dry_run_max_resolution,
+            dry_run_max_resolution: config.dry_run_max_resolution,
         }
     }
 }
@@ -25,6 +25,9 @@ impl DisassembleAI for Gvoid2dAI {
             Some(b) => b,
             None => { return vec![Command::Halt]; }
         };
+
+        let r = model.matrix.len();
+        let dry_run = r <= self.dry_run_max_resolution as usize;
 
         let x_size = (bounding.max_x - bounding.min_x + 1) as usize;
         let y_size = (bounding.max_y - bounding.min_y + 1) as usize;
@@ -61,20 +64,58 @@ impl DisassembleAI for Gvoid2dAI {
         for z_index in 0..(grid_index_z.len() - 1) {
             // 2d-GVoid
             let z_size = grid_index_z[z_index + 1] - grid_index_z[z_index] + 1;
-            for ms in generate_2d_gvoid_commands(&grid_index_x, y_size, z_size) {
-                if !harmonics_high {
-                    match state.update_time_step(&ms[..]) {
-                        Ok(_) => {}
-                        Err(_) => {
-                            harmonics_high = true;
-                            let mut step = vec![];
-                            step.push(Command::Flip);
-                            step.extend(repeat(Command::Wait).take(ms.len() - 1));
-                            commands.push(step.clone());
+            for step in generate_2d_gvoid_commands(&grid_index_x, y_size, z_size) {
+                if dry_run {
+                    let mut cloned = state.clone();
+                    if !harmonics_high {
+                        match cloned.update_time_step(&step[..]) {
+                            Ok(_) => {
+                                state = cloned;
+                            }
+                            Err(_) => {
+                                harmonics_high = true;
+                                let mut high = vec![Command::Flip];
+                                high.extend(repeat(Command::Wait).take(step.len() - 1));
+                                state.update_time_step(&high[..]).unwrap();
+                                state.update_time_step(&step[..]).unwrap();
+                                commands.push(high);
+                            }
+                        }
+                    } else {
+                        let mut low = vec![Command::Flip];
+                        low.extend(repeat(Command::Wait).take(step.len() - 1));
+
+                        match cloned.update_time_step(&low[..]) {
+                            Ok(_) => match cloned.update_time_step(&step[..]) {
+                                Ok(_) => {
+                                    harmonics_high = false;
+                                    state = cloned;
+                                    commands.push(low);
+                                }
+                                Err(_) => {
+                                    state.update_time_step(&step[..]).unwrap();
+                                }
+                            },
+                            Err(_) => {
+                                state.update_time_step(&step[..]).unwrap();
+                            }
+                        }
+                    }
+                } else {
+                    if !harmonics_high {
+                        match state.update_time_step(&step[..]) {
+                            Ok(_) => {}
+                            Err(_) => {
+                                harmonics_high = true;
+                                let mut step1 = vec![];
+                                step1.push(Command::Flip);
+                                step1.extend(repeat(Command::Wait).take(step.len() - 1));
+                                commands.push(step1);
+                            }
                         }
                     }
                 }
-                commands.push(ms.clone());
+                commands.push(step.clone());
             }
 
             if z_index < grid_index_z.len() - 2 {
