@@ -8,6 +8,7 @@ use common::*;
 use model::*;
 use state::State;
 use std::cmp::min;
+use std::collections::BinaryHeap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
@@ -166,16 +167,17 @@ impl BfsAI {
         from: &Position,
         tos: &Vec<Position>,
     ) -> Option<(Position, Vec<Command>)> {
+        let tos0 = tos[0];
         let tos = tos.iter().map(|p| *p).collect::<HashSet<Position>>();
-        let mut que = VecDeque::<Position>::new();
-        que.push_back(*from);
+        let mut que = BinaryHeap::<(i32, Position, i32)>::new();
+        que.push((0, *from, 0));
         let mut parents = HashMap::<Position, (Position, Command)>::new(); // visit + 経路復元用
         parents.insert(*from, (*from, Command::Wait));
         let mut max_dist = 15;
         for to in tos.iter() {
             max_dist = min(max_dist, (*from - to).manhattan_length());
         }
-        while let Some(f) = que.pop_front() {
+        while let Some((_score, f, cnt)) = que.pop() {
             if tos.contains(&f) {
                 // 経路復元してreverseで正順にしてコマンドの系列を返す
                 let mut ret = vec![];
@@ -195,11 +197,22 @@ impl BfsAI {
                     continue;
                 }
                 parents.insert(t, (f, command));
-                que.push_back(t);
+                let score = self.calc_astar_score(cnt + 1, &t, &tos0);
+                que.push((score, t, cnt + 1));
             }
         }
         // どこにもたどり着けなかった場合
         None
+    }
+    // tos[0]を基準にする
+    fn calc_astar_score(&self, cnt: i32, from: &Position, to: &Position) -> i32 {
+        let mut score = cnt * 5;
+        let d = (*from - to).manhattan_length() / 2;
+        score += d;
+        if from.y <= to.y {
+            score += 2;
+        }
+        -score
     }
     // fromからtoをfillするコマンドを発行
     // fromとtoはncdの距離
@@ -424,6 +437,7 @@ impl AssembleAI for BfsAI {
         // TODO 分散
         // ブロック埋め
         while self.candidates.len() > 0 || self.is_all_bot_command_done() {
+            // println!("All Candidate: {}", self.visited.len());
             // println!("Rest Candidate: {}", self.candidates.len());
             // 1 time step 実行
             for i in 0..self.bots.len() {
@@ -443,6 +457,7 @@ impl AssembleAI for BfsAI {
                 match self.make_target_fill_command(&from, &to.unwrap()) {
                     None => {
                         // TODO
+                        // return self.trace.clone();
                         assert!(false);
                         // TODO candidateを元に戻すか保持する
                         self.bots[i].nop();
@@ -522,20 +537,20 @@ fn pos_smove_all_test() {
     let config = Config::new();
     let mut bfs_ai = BfsAI::new(&config, &model, &model);
     {
-        let llcds = bfs_ai.pos_smove_all(&Position::new(30, 30, 30));
+        let llcds = bfs_ai.pos_smove_all(&Position::new(30, 30, 30), 15);
         assert_eq!(llcds.len(), 90);
     }
     {
-        let llcds = bfs_ai.pos_smove_all(&Position::new(1, 1, 1));
+        let llcds = bfs_ai.pos_smove_all(&Position::new(1, 1, 1), 15);
         assert_eq!(llcds.len(), 48);
     }
     {
-        let llcds = bfs_ai.pos_smove_all(&Position::new(98, 98, 98));
+        let llcds = bfs_ai.pos_smove_all(&Position::new(98, 98, 98), 15);
         assert_eq!(llcds.len(), 48);
     }
     {
         bfs_ai.volatiles.insert(Position::new(28, 30, 30));
-        let llcds = bfs_ai.pos_smove_all(&Position::new(30, 30, 30));
+        let llcds = bfs_ai.pos_smove_all(&Position::new(30, 30, 30), 15);
         assert_eq!(llcds.len(), 76);
     }
 }
