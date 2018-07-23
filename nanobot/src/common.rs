@@ -668,6 +668,27 @@ pub fn adjacent(p: Position) -> Vec<Position> {
     ]
 }
 
+pub fn all_ncd() -> Vec<NCD> {
+    let mut ret = vec![];
+    for &dx in [-1, 0, 1].iter() {
+        for &dy in [-1, 0, 1].iter() {
+            for &dz in [-1, 0, 1].iter() {
+                if (dx == 0 && dy == 0 && dz == 0) || (dx != 0 && dy != 0 && dz != 0) {
+                    continue;
+                }
+                ret.push(NCD::new(dx, dy, dz));
+            }
+        }
+    }
+    ret
+}
+
+#[test]
+fn all_ncd_test() {
+    let ncds = all_ncd();
+    assert_eq!(ncds.len(), 18);
+}
+
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug, Hash)]
 pub struct Bid(pub usize);
 
